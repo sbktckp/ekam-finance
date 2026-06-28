@@ -3,19 +3,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard,
-  ArrowLeftRight,
-  Calculator,
-  TrendingUp,
-  Target,
-  CalendarClock,
-  BarChart3,
-  Settings,
-  LogOut,
-  Wallet,
+  LayoutDashboard, ArrowLeftRight, Calculator, TrendingUp,
+  Target, CalendarClock, BarChart3, Settings, LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { Logo } from '@/components/shared/logo'
 
 const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -40,11 +33,9 @@ export function Sidebar() {
 
   return (
     <aside className="fixed inset-y-0 left-0 w-60 bg-gray-900 text-white flex flex-col z-50">
-      <div className="px-6 py-5 border-b border-gray-800">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-emerald-500 rounded-lg flex items-center justify-center">
-            <Wallet className="w-4 h-4 text-white" />
-          </div>
+      <div className="px-5 py-5 border-b border-gray-800">
+        <div className="flex items-center gap-2.5">
+          <Logo size={28} />
           <span className="font-semibold text-sm tracking-wide">Ekam Finance</span>
         </div>
       </div>
