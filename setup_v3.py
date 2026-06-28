@@ -1,4 +1,52 @@
-'use client'
+#!/usr/bin/env python3
+"""
+Run from ekam-finance root:
+  python3 setup_v3.py
+Then:
+  git add .
+  git commit -m "fix: correct route paths + email confirmation"
+  git push
+"""
+import os, shutil
+
+def write(path, content):
+    os.makedirs(os.path.dirname(path) if os.path.dirname(path) else '.', exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print(f'  ✓ {path}')
+
+def move(src, dst):
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copy2(src, dst)
+    os.remove(src)
+    # Remove empty directory if left behind
+    try:
+        os.rmdir(os.path.dirname(src))
+    except OSError:
+        pass
+    print(f'  → moved {src}')
+
+print('Moving pages to correct route paths...')
+
+pages = [
+    'transactions', 'budget', 'investments',
+    'goals', 'bills', 'reports', 'settings'
+]
+
+for page in pages:
+    src = f'app/(dashboard)/{page}/page.tsx'
+    dst = f'app/(dashboard)/dashboard/{page}/page.tsx'
+    if os.path.exists(src):
+        move(src, dst)
+    elif os.path.exists(dst):
+        print(f'  ✓ {dst} already in correct place')
+    else:
+        print(f'  ⚠ {src} not found — skipping')
+
+# ─── Updated signup page with email confirmation UI ───────────────────────────
+print('\nUpdating signup page...')
+
+write('app/(auth)/signup/page.tsx', """'use client'
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -179,3 +227,9 @@ export default function SignupPage() {
     </div>
   )
 }
+""")
+
+print('\nDone! Now run:')
+print('  git add .')
+print('  git commit -m "fix: correct route paths + email confirmation"')
+print('  git push')
