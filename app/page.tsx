@@ -3,14 +3,24 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
-  LayoutDashboard, ArrowLeftRight, Calculator, TrendingUp,
-  Target, CalendarClock, BarChart3, Shield,
-  ChevronRight, ArrowUpRight, Sparkles, Zap,
+  LayoutDashboard, ArrowLeftRight, Calculator,
+  TrendingUp, Target, CalendarClock, BarChart3, Shield,
+  ArrowUpRight,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/logo'
 
-// ─── Hooks ───────────────────────────────────────────────────────────────────
-function useInView(threshold = 0.2) {
+/* ─── Hooks ──────────────────────────────────────────────────────────────── */
+function useScrolled(threshold = 20) {
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > threshold)
+    window.addEventListener('scroll', fn, { passive: true })
+    return () => window.removeEventListener('scroll', fn)
+  }, [threshold])
+  return scrolled
+}
+
+function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null)
   const [inView, setInView] = useState(false)
   useEffect(() => {
@@ -24,105 +34,106 @@ function useInView(threshold = 0.2) {
   return { ref, inView }
 }
 
-function useAnimatedCounter(target: number, active: boolean, duration = 1800) {
-  const [val, setVal] = useState(0)
+function useCounter(target: number, active: boolean, ms = 1600) {
+  const [v, setV] = useState(0)
   useEffect(() => {
     if (!active) return
     const t0 = performance.now()
     const tick = (now: number) => {
-      const p = Math.min((now - t0) / duration, 1)
-      const e = 1 - Math.pow(1 - p, 4)
-      setVal(Math.round(e * target))
+      const p = Math.min((now - t0) / ms, 1)
+      setV(Math.round((1 - Math.pow(1 - p, 3)) * target))
       if (p < 1) requestAnimationFrame(tick)
     }
     requestAnimationFrame(tick)
-  }, [active, target, duration])
-  return val
+  }, [active, target, ms])
+  return v
 }
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const FEATURES = [
-  { icon: LayoutDashboard, label: 'Dashboard',    desc: 'Net worth, accounts, and goals at a glance',   color: 'bg-sky-500/12 text-sky-400',     glow: 'rgba(14,165,233,0.15)'  },
-  { icon: ArrowLeftRight,  label: 'Transactions', desc: 'Log, filter and categorize every rupee',        color: 'bg-violet-500/12 text-violet-400', glow: 'rgba(139,92,246,0.15)' },
-  { icon: Calculator,      label: 'Budget',       desc: 'Monthly spending limits by category',            color: 'bg-amber-500/12 text-amber-400',  glow: 'rgba(245,158,11,0.15)'  },
-  { icon: TrendingUp,      label: 'Investments',  desc: 'Track stocks, mutual funds, crypto & more',     color: 'bg-emerald-500/12 text-emerald-400', glow: 'rgba(16,185,129,0.15)'},
-  { icon: Target,          label: 'Goals',        desc: 'Save toward anything with progress tracking',   color: 'bg-rose-500/12 text-rose-400',    glow: 'rgba(244,63,94,0.15)'   },
-  { icon: CalendarClock,   label: 'Bills',        desc: 'Never miss a subscription or payment',          color: 'bg-orange-500/12 text-orange-400', glow: 'rgba(249,115,22,0.15)' },
-  { icon: BarChart3,       label: 'Reports',      desc: 'Calendar heatmap, charts, and AI summaries',   color: 'bg-indigo-500/12 text-indigo-400', glow: 'rgba(99,102,241,0.15)' },
-  { icon: Shield,          label: 'Secure',       desc: 'Row-level security — your data stays yours',   color: 'bg-teal-500/12 text-teal-400',    glow: 'rgba(20,184,166,0.15)'  },
+/* ─── Static data ────────────────────────────────────────────────────────── */
+const TOOLS = [
+  { icon: LayoutDashboard, label: 'Dashboard',    note: 'Net worth at a glance'             },
+  { icon: ArrowLeftRight,  label: 'Transactions', note: 'Every rupee, logged'               },
+  { icon: Calculator,      label: 'Budget',        note: 'Monthly limits by category'        },
+  { icon: TrendingUp,      label: 'Investments',  note: 'Stocks, SIPs, crypto, more'        },
+  { icon: Target,          label: 'Goals',         note: 'Save toward what matters'          },
+  { icon: CalendarClock,   label: 'Bills',         note: 'No payment slips through'          },
+  { icon: BarChart3,       label: 'Reports',       note: 'Calendar view, charts, AI digest'  },
+  { icon: Shield,          label: 'Secure',        note: 'Your data stays yours'             },
 ]
 
-const MARQUEE = [
-  'Dashboard','Transactions','Budget','Investments',
-  'Goals','Bills','Reports','AI Insights','Secure','Multi-currency',
-  'Dashboard','Transactions','Budget','Investments',
-  'Goals','Bills','Reports','AI Insights','Secure','Multi-currency',
+const BARS = [18, 32, 26, 55, 40, 70, 52, 84, 60, 76, 48, 90]
+
+const TICKER = [
+  'Dashboard', 'Transactions', 'Budget', 'Investments',
+  'Goals', 'Bills', 'Reports', 'AI Insights', 'INR native',
+  'Dashboard', 'Transactions', 'Budget', 'Investments',
+  'Goals', 'Bills', 'Reports', 'AI Insights', 'INR native',
 ]
 
-const MOCK_BARS = [22,38,31,58,45,72,54,88,62,79,55,94]
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-function MockDashboard() {
+/* ─── Mock card ──────────────────────────────────────────────────────────── */
+function MockCard() {
   return (
-    <div className="relative w-[310px] mx-auto animate-float">
-      <div className="absolute -inset-4 bg-emerald-500/15 rounded-3xl blur-3xl animate-glow-pulse" />
-      <div className="absolute -inset-8 bg-emerald-500/6 rounded-full blur-3xl animate-glow-pulse delay-300" />
+    <div className="relative animate-float w-[300px]">
       <div
-        className="relative rounded-2xl overflow-hidden border"
+        className="absolute -inset-6 rounded-full animate-breathe"
+        style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 70%)' }}
+      />
+      <div
+        className="relative rounded-2xl overflow-hidden"
         style={{
-          background: 'linear-gradient(160deg, #111 0%, #0a0a0a 100%)',
-          borderColor: 'rgba(255,255,255,0.10)',
-          boxShadow: '0 32px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)',
+          background: 'linear-gradient(145deg, #141414 0%, #0d0d0d 100%)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          boxShadow: '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)',
         }}
       >
-        {/* Title bar */}
-        <div className="flex items-center gap-1.5 px-3.5 py-2.5" style={{ background: 'rgba(0,0,0,0.4)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="w-2 h-2 rounded-full" style={{ background: '#ff5f57' }} />
-          <div className="w-2 h-2 rounded-full" style={{ background: '#febc2e' }} />
-          <div className="w-2 h-2 rounded-full" style={{ background: '#28c840' }} />
-          <div className="flex-1 mx-2">
-            <div className="h-3.5 rounded-md max-w-24 mx-auto" style={{ background: 'rgba(255,255,255,0.06)' }} />
-          </div>
+        <div
+          className="px-4 py-2.5 flex items-center gap-1.5"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.3)' }}
+        >
+          <span className="w-2 h-2 rounded-full" style={{ background: '#ff5f57' }} />
+          <span className="w-2 h-2 rounded-full" style={{ background: '#febc2e' }} />
+          <span className="w-2 h-2 rounded-full" style={{ background: '#28c840' }} />
         </div>
 
-        {/* Body */}
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-[10px] text-zinc-500 mb-0.5">Good evening, Smit 👋</p>
-              <p className="text-[9px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Here&apos;s your financial overview</p>
-            </div>
-            <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
-              <span className="text-[8px] text-emerald-400 font-bold">S</span>
-            </div>
+        <div className="p-4 space-y-3">
+          <div>
+            <p className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>Good evening, Smit</p>
+            <p className="text-[22px] font-black text-white tracking-tight">₹2,40,000</p>
+            <p className="text-[10px]" style={{ color: '#34d399' }}>Net worth</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5 mb-2.5">
+          <div className="grid grid-cols-3 gap-1.5">
             {[
-              { l: 'Net Worth',   v: '₹2,40,000', c: '#34d399' },
-              { l: 'Income',      v: '₹85,000',   c: '#60a5fa' },
-              { l: 'Expenses',    v: '₹42,000',   c: '#f87171' },
-              { l: 'Net Saved',   v: '+₹43,000',  c: '#c084fc' },
+              { l: 'Income',   v: '₹85k', c: '#60a5fa' },
+              { l: 'Spent',    v: '₹42k', c: '#f87171' },
+              { l: 'Saved',    v: '₹43k', c: '#a78bfa' },
             ].map(k => (
-              <div key={k.l} className="rounded-xl p-2.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <p className="text-[8px] mb-1" style={{ color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{k.l}</p>
+              <div
+                key={k.l}
+                className="rounded-xl p-2.5"
+                style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <p className="text-[9px] mb-1" style={{ color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}>{k.l}</p>
                 <p className="text-xs font-bold" style={{ color: k.c }}>{k.v}</p>
               </div>
             ))}
           </div>
 
-          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-[8px] mb-2" style={{ color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Monthly overview</p>
-            <div className="flex items-end gap-[3px] h-9">
-              {MOCK_BARS.map((h, i) => (
+          <div
+            className="rounded-xl p-3"
+            style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.06)' }}
+          >
+            <p className="text-[9px] mb-2" style={{ color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}>This month</p>
+            <div className="flex items-end gap-[3px] h-8">
+              {BARS.map((h, i) => (
                 <div
                   key={i}
-                  className="flex-1 rounded-[2px] transition-all"
+                  className="flex-1 rounded-[2px]"
                   style={{
                     height: `${h}%`,
-                    background: i === MOCK_BARS.length - 1
+                    background: i === BARS.length - 1
                       ? '#10b981'
-                      : `rgba(16,185,129,${0.18 + (h / 100) * 0.38})`,
+                      : `rgba(16,185,129,${0.15 + (h / 100) * 0.42})`,
                   }}
                 />
               ))}
@@ -134,290 +145,297 @@ function MockDashboard() {
   )
 }
 
-function FeatureCard({ feature, index }: { feature: typeof FEATURES[0]; index: number }) {
-  const Icon = feature.icon
-  return (
-    <div
-      className="card-premium rounded-2xl p-5 group cursor-default animate-fade-in-up"
-      style={{ animationDelay: `${index * 0.06}s`, animationFillMode: 'backwards' }}
-    >
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110"
-        style={{ background: feature.color.includes('bg-') ? undefined : feature.glow }}
-      >
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${feature.color}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-      </div>
-      <h3 className="text-sm font-semibold text-white mb-1.5">{feature.label}</h3>
-      <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>{feature.desc}</p>
-    </div>
-  )
-}
-
-function StatBlock({ value, suffix = '', prefix = '', label, active }: { value: number; suffix?: string; prefix?: string; label: string; active: boolean }) {
-  const count = useAnimatedCounter(value, active)
-  return (
-    <div className="text-center animate-fade-in-up">
-      <p className="text-6xl font-black text-gray-900 tracking-tight tabular-nums mb-2">
-        {prefix}{count.toLocaleString('en-IN')}{suffix}
-      </p>
-      <p className="text-sm text-gray-500 font-medium">{label}</p>
-    </div>
-  )
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+/* ─── Page ───────────────────────────────────────────────────────────────── */
 export default function LandingPage() {
-  const [scrolled, setScrolled] = useState(false)
-  const stats = useInView(0.4)
-  const features = useInView(0.1)
+  const scrolled = useScrolled()
+  const statsEl  = useInView(0.4)
+  const toolsEl  = useInView(0.1)
 
-  useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > 24)
-    window.addEventListener('scroll', fn, { passive: true })
-    return () => window.removeEventListener('scroll', fn)
-  }, [])
+  const c1 = useCounter(8,   statsEl.inView)
+  const c2 = useCounter(100, statsEl.inView)
 
   return (
-    <div className="min-h-screen" style={{ background: '#030303', color: '#fff' }}>
+    <div style={{ background: '#040404', color: '#fff', overflowX: 'hidden' }}>
 
-      {/* ─── NAV ─── */}
-      <nav
-        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+      {/* NAV */}
+      <header
+        className="fixed top-0 inset-x-0 z-50 transition-all duration-300"
         style={{
-          background: scrolled ? 'rgba(3,3,3,0.82)' : 'transparent',
-          backdropFilter: scrolled ? 'blur(20px) saturate(180%)' : 'none',
+          background: scrolled ? 'rgba(4,4,4,0.85)' : 'transparent',
+          backdropFilter: scrolled ? 'blur(18px)' : 'none',
           borderBottom: scrolled ? '1px solid rgba(255,255,255,0.07)' : '1px solid transparent',
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 h-[60px] flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Logo size={28} />
-            <span className="font-semibold text-sm tracking-wide" style={{ color: 'rgba(255,255,255,0.88)' }}>
+        <div className="max-w-6xl mx-auto px-6 h-[58px] flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <Logo size={26} />
+            <span
+              className="text-sm font-semibold tracking-wide transition-opacity duration-150 group-hover:opacity-70"
+              style={{ color: 'rgba(255,255,255,0.85)' }}
+            >
               Ekam Finance
             </span>
-          </div>
-          <div className="flex items-center gap-2">
+          </Link>
+          <nav className="flex items-center gap-1">
             <Link
               href="/login"
-              className="text-sm px-4 py-1.5 rounded-lg transition-all duration-150"
-              style={{ color: 'rgba(255,255,255,0.45)' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#fff'; (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.45)'; (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+              className="text-sm px-4 py-1.5 rounded-lg transition-all duration-150 hover:bg-white/6"
+              style={{ color: 'rgba(255,255,255,0.40)' }}
             >
               Sign in
             </Link>
             <Link
               href="/signup"
-              className="flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded-lg transition-all duration-200"
+              className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25 hover:bg-emerald-400"
               style={{ background: '#10b981', color: '#000' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#34d399'; (e.currentTarget as HTMLElement).style.transform = 'scale(1.04)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(16,185,129,0.35)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#10b981'; (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
             >
-              Get started <ChevronRight className="w-3.5 h-3.5" />
+              Get started
             </Link>
-          </div>
+          </nav>
         </div>
-      </nav>
+      </header>
 
-      {/* ─── HERO ─── */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-24 pb-20 overflow-hidden">
-        {/* Grid */}
-        <div className="absolute inset-0 bg-grid-dark" />
-        {/* Gradient base */}
-        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(16,185,129,0.12) 0%, transparent 70%)' }} />
-        {/* Orbs */}
-        <div className="absolute top-1/3 left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] animate-glow-pulse" style={{ background: 'rgba(16,185,129,0.07)' }} />
-        <div className="absolute bottom-1/3 right-1/4 w-[500px] h-[500px] rounded-full blur-[100px] animate-glow-pulse delay-400" style={{ background: 'rgba(16,185,129,0.05)' }} />
+      {/* HERO */}
+      <section className="relative min-h-screen grid-bg flex items-center px-6 pt-20 pb-16">
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(16,185,129,0.08) 0%, transparent 65%)' }} />
 
-        <div className="relative z-10 max-w-5xl mx-auto text-center">
-          {/* Badge */}
-          <div
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold mb-8 animate-fade-in-up"
-            style={{
-              background: 'rgba(16,185,129,0.10)',
-              border: '1px solid rgba(16,185,129,0.30)',
-              color: '#34d399',
-            }}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Personal finance, reimagined
-          </div>
+        <div className="max-w-6xl mx-auto w-full relative z-10">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
 
-          {/* Headline */}
-          <h1
-            className="font-black tracking-tight leading-none mb-6 animate-fade-in-up delay-100"
-            style={{ fontSize: 'clamp(52px, 8vw, 92px)', letterSpacing: '-0.03em' }}
-          >
-            One place for<br />
-            <span className="gradient-text">all your finances.</span>
-          </h1>
+            {/* Left */}
+            <div>
+              <div
+                className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-8 animate-fade-up"
+                style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)', color: '#6ee7b7' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Made in India
+              </div>
 
-          {/* Sub */}
-          <p
-            className="text-lg max-w-lg mx-auto mb-10 leading-relaxed animate-fade-in-up delay-200"
-            style={{ color: 'rgba(255,255,255,0.42)' }}
-          >
-            Track spending, grow wealth, and hit savings goals —
-            all in one clean, fast app built for India.
-          </p>
+              <h1
+                className="font-black leading-none mb-6 animate-fade-up delay-1"
+                style={{ fontSize: 'clamp(48px, 6.5vw, 80px)', letterSpacing: '-0.03em' }}
+              >
+                One app for<br />
+                <span className="text-gradient">every rupee.</span>
+              </h1>
 
-          {/* CTAs */}
-          <div className="flex items-center justify-center gap-4 flex-wrap mb-24 animate-fade-in-up delay-300">
-            <Link
-              href="/signup"
-              className="flex items-center gap-2 font-bold px-8 py-3.5 rounded-xl text-sm transition-all duration-200"
-              style={{ background: '#10b981', color: '#000' }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = '#34d399'; el.style.transform = 'translateY(-2px) scale(1.02)'; el.style.boxShadow = '0 16px 40px rgba(16,185,129,0.35)' }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = '#10b981'; el.style.transform = ''; el.style.boxShadow = '' }}
-            >
-              Start for free <ArrowUpRight className="w-4 h-4" />
-            </Link>
-            <Link
-              href="/login"
-              className="text-sm px-8 py-3.5 rounded-xl transition-all duration-200"
-              style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.10)' }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.color = '#fff'; el.style.borderColor = 'rgba(255,255,255,0.22)'; el.style.background = 'rgba(255,255,255,0.05)' }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.color = 'rgba(255,255,255,0.45)'; el.style.borderColor = 'rgba(255,255,255,0.10)'; el.style.background = 'transparent' }}
-            >
-              Already have an account →
-            </Link>
-          </div>
+              <p
+                className="text-lg mb-3 leading-relaxed animate-fade-up delay-2"
+                style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}
+              >
+                You know when your salary hits and by the 20th you have no idea where it went?
+              </p>
+              <p
+                className="text-lg mb-10 font-medium animate-fade-up delay-3"
+                style={{ color: 'rgba(255,255,255,0.70)', maxWidth: '420px' }}
+              >
+                That is what Ekam solves.
+              </p>
 
-          {/* Mock */}
-          <div className="animate-fade-in-up delay-400">
-            <MockDashboard />
+              <div className="flex items-center gap-3 animate-fade-up delay-4">
+                <Link
+                  href="/signup"
+                  className="flex items-center gap-1.5 text-sm font-bold px-6 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/30 hover:bg-emerald-400"
+                  style={{ background: '#10b981', color: '#000' }}
+                >
+                  Start free <ArrowUpRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/login"
+                  className="text-sm px-6 py-2.5 rounded-xl transition-all duration-150 hover:bg-white/6"
+                  style={{ color: 'rgba(255,255,255,0.38)', border: '1px solid rgba(255,255,255,0.09)' }}
+                >
+                  Sign in
+                </Link>
+              </div>
+
+              <p
+                className="text-xs mt-6 animate-fade-up delay-5"
+                style={{ color: 'rgba(255,255,255,0.22)' }}
+              >
+                Free. No card required. No ads.
+              </p>
+            </div>
+
+            {/* Right */}
+            <div className="flex justify-center lg:justify-end animate-fade-up delay-4">
+              <MockCard />
+            </div>
+
           </div>
         </div>
       </section>
 
-      {/* ─── MARQUEE ─── */}
-      <div className="relative py-4 overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="flex gap-10 animate-marquee whitespace-nowrap select-none">
-          {MARQUEE.map((item, i) => (
-            <span key={i} className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+      {/* TICKER */}
+      <div
+        className="overflow-hidden py-3.5"
+        style={{ borderTop: '1px solid rgba(255,255,255,0.055)', borderBottom: '1px solid rgba(255,255,255,0.055)', background: 'rgba(255,255,255,0.015)' }}
+      >
+        <div className="flex gap-9 animate-marquee whitespace-nowrap select-none">
+          {TICKER.map((t, i) => (
+            <span
+              key={i}
+              className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.11em]"
+              style={{ color: 'rgba(255,255,255,0.22)' }}
+            >
               <span className="w-1 h-1 rounded-full" style={{ background: '#10b981' }} />
-              {item}
+              {t}
             </span>
           ))}
         </div>
       </div>
 
-      {/* ─── FEATURES ─── */}
-      <section className="py-32 px-6" style={{ background: '#050505' }} ref={features.ref}>
+      {/* TOOLS */}
+      <section
+        className="py-28 px-6"
+        style={{ background: '#060606' }}
+        ref={toolsEl.ref}
+      >
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16">
-            <div
-              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold mb-5"
-              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.20)', color: '#34d399' }}
-            >
-              <Zap className="w-3 h-3" /> Features
-            </div>
+          <div className="mb-16">
+            <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#10b981' }}>
+              What it does
+            </p>
             <h2
-              className="font-black text-white tracking-tight mb-4"
-              style={{ fontSize: 'clamp(32px, 5vw, 52px)', letterSpacing: '-0.02em' }}
+              className="font-black text-white"
+              style={{ fontSize: 'clamp(32px, 4.5vw, 52px)', letterSpacing: '-0.02em', lineHeight: 1.1 }}
             >
-              Everything in one place.
+              Eight tools.<br />One tab.
             </h2>
-            <p className="text-base max-w-sm mx-auto" style={{ color: 'rgba(255,255,255,0.35)' }}>
-              Eight powerful modules. One clean interface. Zero subscriptions.
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {TOOLS.map((tool, i) => {
+              const Icon = tool.icon
+              return (
+                <div
+                  key={tool.label}
+                  className={`surface-dark rounded-2xl p-5 animate-fade-up`}
+                  style={{ animationDelay: `${i * 0.055}s`, animationFillMode: 'backwards' }}
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
+                    style={{ background: 'rgba(16,185,129,0.09)', color: '#34d399' }}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <p className="text-sm font-semibold text-white mb-1">{tool.label}</p>
+                  <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.36)' }}>
+                    {tool.note}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* INDIA STRIP */}
+      <section
+        className="py-20 px-6"
+        style={{ background: '#fff' }}
+        ref={statsEl.ref}
+      >
+        <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 items-center">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600 mb-4">Built for India</p>
+            <h2
+              className="font-black text-gray-900 mb-5"
+              style={{ fontSize: 'clamp(28px, 4vw, 44px)', letterSpacing: '-0.02em', lineHeight: 1.1 }}
+            >
+              INR first.<br />April tax year.<br />Kolkata timezone.
+            </h2>
+            <p className="text-base text-gray-500 leading-relaxed">
+              Not a US app retrofitted for India. Every default was chosen for how Indians actually manage money.
             </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {FEATURES.map((f, i) => <FeatureCard key={f.label} feature={f} index={i} />)}
+          <div className="grid grid-cols-2 gap-5">
+            {[
+              { n: c1,   s: '',   l: 'Finance modules'    },
+              { n: c2,   s: '%',  l: 'Data ownership'     },
+            ].map(s => (
+              <div key={s.l} className="text-center p-6 rounded-2xl" style={{ background: '#f9fafb', border: '1px solid #f0f0f0' }}>
+                <p className="text-5xl font-black text-gray-900 tabular-nums tracking-tight">
+                  {s.n}{s.s}
+                </p>
+                <p className="text-sm text-gray-400 mt-2 font-medium">{s.l}</p>
+              </div>
+            ))}
+            <div className="col-span-2 text-center p-5 rounded-2xl" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
+              <p className="text-2xl font-black text-emerald-700">Free forever</p>
+              <p className="text-sm text-emerald-600 mt-1">No credit card, no subscriptions</p>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ─── STATS ─── */}
-      <section className="py-28 px-6 bg-white" ref={stats.ref}>
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-16">
-            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600 mb-4">By the numbers</p>
-            <h2 className="text-5xl font-black text-gray-900 tracking-tight">Built for real people.</h2>
-          </div>
-          <div className="grid grid-cols-3 gap-12">
-            <StatBlock value={8}   suffix="+"  label="Finance modules"       active={stats.inView} />
-            <StatBlock value={0}   prefix="₹"  label="Cost. Forever."        active={stats.inView} />
-            <StatBlock value={100} suffix="%" label="Data ownership. Yours." active={stats.inView} />
-          </div>
-        </div>
-      </section>
-
-      {/* ─── CTA ─── */}
-      <section className="py-32 px-6" style={{ background: '#050505' }}>
-        <div className="max-w-2xl mx-auto text-center">
-          <div className="relative inline-block mb-8">
-            <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full scale-150" />
+      {/* CTA */}
+      <section
+        className="py-32 px-6 grid-bg text-center"
+        style={{ background: '#060606' }}
+      >
+        <div className="max-w-xl mx-auto">
+          <div className="flex justify-center mb-8">
             <div className="relative">
-              <Logo size={60} />
+              <div className="absolute inset-0 scale-[2.5] rounded-full animate-breathe" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)' }} />
+              <Logo size={52} />
             </div>
           </div>
           <h2
-            className="font-black text-white tracking-tight mb-5"
-            style={{ fontSize: 'clamp(36px, 5vw, 56px)', letterSpacing: '-0.02em' }}
+            className="font-black text-white mb-4"
+            style={{ fontSize: 'clamp(36px, 5vw, 56px)', letterSpacing: '-0.025em', lineHeight: 1.1 }}
           >
-            Start your financial<br />journey today.
+            Start knowing where your money goes.
           </h2>
-          <p className="text-lg mb-10" style={{ color: 'rgba(255,255,255,0.35)' }}>
-            Free forever. No credit card. No ads. Just clarity.
+          <p className="mb-10 text-lg" style={{ color: 'rgba(255,255,255,0.32)' }}>
+            Takes two minutes to set up.
           </p>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 font-bold px-10 py-4 rounded-xl text-base transition-all duration-200"
+            className="inline-flex items-center gap-2 font-bold px-9 py-3.5 rounded-xl text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-emerald-500/30 hover:bg-emerald-400"
             style={{ background: '#10b981', color: '#000' }}
-            onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = '#34d399'; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = '0 24px 48px rgba(16,185,129,0.35)' }}
-            onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = '#10b981'; el.style.transform = ''; el.style.boxShadow = '' }}
           >
-            Create free account <ArrowUpRight className="w-5 h-5" />
+            Create free account <ArrowUpRight className="w-4 h-4" />
           </Link>
         </div>
       </section>
 
-      {/* ─── FOOTER ─── */}
+      {/* FOOTER */}
       <footer
-        className="py-12 px-6"
-        style={{ background: '#000', borderTop: '1px solid rgba(255,255,255,0.06)' }}
+        className="px-6 py-10"
+        style={{ background: '#000', borderTop: '1px solid rgba(255,255,255,0.055)' }}
       >
-        <div className="max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-3">
-              <Logo size={22} />
-              <span className="text-sm" style={{ color: 'rgba(255,255,255,0.30)' }}>Ekam Finance</span>
-            </div>
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
+          <Link href="/" className="flex items-center gap-2.5">
+            <Logo size={20} />
+            <span className="text-sm" style={{ color: 'rgba(255,255,255,0.28)' }}>Ekam Finance</span>
+          </Link>
 
-            <p className="text-sm text-center" style={{ color: 'rgba(255,255,255,0.30)' }}>
-              Made by{' '}
-              {/* ↓ Update this LinkedIn URL to your actual profile */}
-              <a
-                href="https://www.linkedin.com/in/smit-bharat-patil"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold transition-colors duration-150"
-                style={{ color: 'rgba(255,255,255,0.70)', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.20)', textUnderlineOffset: '3px' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#34d399'; (e.currentTarget as HTMLElement).style.textDecorationColor = '#34d399' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.70)'; (e.currentTarget as HTMLElement).style.textDecorationColor = 'rgba(255,255,255,0.20)' }}
-              >
-                Smit Bharat Patil
-              </a>
-              {' '}under the guidance of{' '}
-              {/* ↓ Update this LinkedIn URL to Pakshal's actual profile */}
-              <a
-                href="https://www.linkedin.com/in/pakshal-tatad"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold transition-colors duration-150"
-                style={{ color: 'rgba(255,255,255,0.70)', textDecoration: 'underline', textDecorationColor: 'rgba(255,255,255,0.20)', textUnderlineOffset: '3px' }}
-                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = '#34d399'; (e.currentTarget as HTMLElement).style.textDecorationColor = '#34d399' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.70)'; (e.currentTarget as HTMLElement).style.textDecorationColor = 'rgba(255,255,255,0.20)' }}
-              >
-                Pakshal Tatad
-              </a>
-            </p>
+          <p className="text-sm text-center" style={{ color: 'rgba(255,255,255,0.28)' }}>
+            Made by{' '}
+            <a
+              href="https://www.linkedin.com/in/sbktckp/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold transition-colors duration-150 hover:text-emerald-400 underline underline-offset-2"
+              style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}
+            >
+              Smit Bharat Patil
+            </a>
+            {' '}under the guidance of{' '}
+            <a
+              href="https://www.linkedin.com/in/pakshal-tated-706155318/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold transition-colors duration-150 hover:text-emerald-400 underline underline-offset-2"
+              style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}
+            >
+              Pakshal Tatad
+            </a>
+          </p>
 
-            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>© 2025 Ekam Finance</p>
-          </div>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>2025 Ekam Finance</p>
         </div>
       </footer>
 

@@ -20,106 +20,87 @@ const NAV = [
 ]
 
 export function Sidebar() {
-  const pathname = usePathname()
+  const path   = usePathname()
   const router = useRouter()
 
+  const active = (href: string) =>
+    href === '/dashboard' ? path === '/dashboard' : path.startsWith(href)
+
   async function signOut() {
-    const s = createClient()
-    await s.auth.signOut()
+    await createClient().auth.signOut()
     router.push('/login')
     router.refresh()
   }
 
-  function isActive(href: string) {
-    return href === '/dashboard' ? pathname === '/dashboard' : pathname.startsWith(href)
-  }
+  const itemClass = (href: string) => ({
+    base: 'flex items-center gap-3 px-3 py-[7px] rounded-[8px] text-[13px] transition-all duration-150 relative group w-full text-left',
+    style: {
+      color:      active(href) ? '#fff' : 'rgba(255,255,255,0.38)',
+      background: active(href) ? 'rgba(16,185,129,0.09)' : 'transparent',
+      fontWeight: active(href) ? '500' : '400',
+      borderLeft: active(href) ? '2px solid #10b981' : '2px solid transparent',
+    },
+  })
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 w-60 flex flex-col z-50 select-none"
+      className="fixed inset-y-0 left-0 w-60 flex flex-col z-50"
       style={{ background: '#0d0d0d', borderRight: '1px solid rgba(255,255,255,0.055)' }}
     >
       {/* Logo */}
-      <div className="px-5 py-4" style={{ borderBottom: '1px solid rgba(255,255,255,0.055)' }}>
-        <div className="flex items-center gap-3">
-          <Logo size={30} />
-          <div>
-            <p className="text-[13px] font-semibold text-white leading-tight tracking-wide">Ekam Finance</p>
-            <p className="text-[10px] leading-tight" style={{ color: 'rgba(255,255,255,0.28)' }}>Personal finance</p>
-          </div>
-        </div>
+      <div className="px-5 h-[58px] flex items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.055)' }}>
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <Logo size={26} />
+          <span className="text-sm font-semibold text-white group-hover:opacity-70 transition-opacity">
+            Ekam Finance
+          </span>
+        </Link>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-2.5 py-3 overflow-y-auto space-y-0.5">
-        {NAV.map(item => {
-          const Icon = item.icon
-          const active = isActive(item.href)
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-[7px] rounded-[9px] text-[13px] transition-all duration-150 relative group"
-              style={{
-                color: active ? '#fff' : 'rgba(255,255,255,0.40)',
-                background: active ? 'rgba(16,185,129,0.10)' : 'transparent',
-                fontWeight: active ? '500' : '400',
-                borderLeft: active ? '2px solid #10b981' : '2px solid transparent',
-              }}
-            >
-              {/* Hover bg */}
-              {!active && (
-                <span
-                  className="absolute inset-0 rounded-[9px] opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                  style={{ background: 'rgba(255,255,255,0.045)' }}
-                />
-              )}
-              <Icon
-                className="w-[15px] h-[15px] shrink-0 relative z-10 transition-colors duration-150"
-                style={{ color: active ? '#34d399' : 'rgba(255,255,255,0.35)' }}
-              />
-              <span className="relative z-10 group-hover:text-white transition-colors duration-150">
-                {item.label}
-              </span>
-              {active && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full relative z-10" style={{ background: '#10b981' }} />
-              )}
-            </Link>
-          )
-        })}
+      {/* Nav links */}
+      <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
+        {NAV.map(({ label, href, icon: Icon }) => (
+          <Link
+            key={href}
+            href={href}
+            className={itemClass(href).base}
+            style={itemClass(href).style}
+          >
+            {!active(href) && (
+              <span className="absolute inset-0 rounded-[8px] bg-white/0 group-hover:bg-white/[0.04] transition-colors" />
+            )}
+            <Icon
+              className="w-[15px] h-[15px] shrink-0 relative z-10"
+              style={{ color: active(href) ? '#34d399' : 'rgba(255,255,255,0.32)' }}
+            />
+            <span className="relative z-10 group-hover:text-white transition-colors">{label}</span>
+          </Link>
+        ))}
       </nav>
 
       {/* Bottom */}
       <div className="px-2.5 py-3 space-y-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.055)' }}>
-        {[
-          { label: 'Settings', href: '/dashboard/settings', icon: Settings, onClick: undefined },
-        ].map(item => {
-          const Icon = item.icon
-          const active = pathname === item.href
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 px-3 py-[7px] rounded-[9px] text-[13px] transition-all duration-150 relative group"
-              style={{
-                color: active ? '#fff' : 'rgba(255,255,255,0.35)',
-                background: active ? 'rgba(16,185,129,0.10)' : 'transparent',
-                borderLeft: active ? '2px solid #10b981' : '2px solid transparent',
-              }}
-            >
-              {!active && <span className="absolute inset-0 rounded-[9px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'rgba(255,255,255,0.045)' }} />}
-              <Icon className="w-[15px] h-[15px] shrink-0 relative z-10" style={{ color: active ? '#34d399' : 'rgba(255,255,255,0.35)' }} />
-              <span className="relative z-10 group-hover:text-white transition-colors">{item.label}</span>
-            </Link>
-          )
-        })}
+        <Link
+          href="/dashboard/settings"
+          className={itemClass('/dashboard/settings').base}
+          style={itemClass('/dashboard/settings').style}
+        >
+          {!active('/dashboard/settings') && (
+            <span className="absolute inset-0 rounded-[8px] bg-white/0 group-hover:bg-white/[0.04] transition-colors" />
+          )}
+          <Settings
+            className="w-[15px] h-[15px] shrink-0 relative z-10"
+            style={{ color: active('/dashboard/settings') ? '#34d399' : 'rgba(255,255,255,0.32)' }}
+          />
+          <span className="relative z-10 group-hover:text-white transition-colors">Settings</span>
+        </Link>
         <button
           onClick={signOut}
-          className="w-full flex items-center gap-3 px-3 py-[7px] rounded-[9px] text-[13px] transition-all duration-150 relative group"
-          style={{ color: 'rgba(255,255,255,0.35)', borderLeft: '2px solid transparent' }}
+          className="flex items-center gap-3 px-3 py-[7px] rounded-[8px] text-[13px] w-full relative group transition-all duration-150"
+          style={{ color: 'rgba(255,255,255,0.32)', borderLeft: '2px solid transparent' }}
         >
-          <span className="absolute inset-0 rounded-[9px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'rgba(255,255,255,0.045)' }} />
-          <LogOut className="w-[15px] h-[15px] shrink-0 relative z-10" style={{ color: 'rgba(255,255,255,0.35)' }} />
+          <span className="absolute inset-0 rounded-[8px] bg-white/0 group-hover:bg-white/[0.04] transition-colors" />
+          <LogOut className="w-[15px] h-[15px] shrink-0 relative z-10" style={{ color: 'rgba(255,255,255,0.28)' }} />
           <span className="relative z-10 group-hover:text-white transition-colors">Sign out</span>
         </button>
       </div>
