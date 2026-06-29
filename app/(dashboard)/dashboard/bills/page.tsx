@@ -17,7 +17,8 @@ export default async function BillsPage() {
 
   return (
     <BillsView
-      bills={(bills ?? []) as Parameters<typeof BillsView>[0]['bills']}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      bills={(bills ?? []) as unknown as Parameters<typeof BillsView>[0]['bills']}
       categories={categories ?? []}
     />
   )
