@@ -18,12 +18,16 @@ export async function addTransaction(formData: FormData): Promise<{ error?: stri
   const date        = formData.get('date')         as string
   const currency    = (formData.get('currency')    as string) || 'INR'
 
-  if (!amount || amount <= 0) return { error: 'Enter a valid amount' }
-  if (!account_id)            return { error: 'Select an account' }
-  if (!date)                  return { error: 'Select a date' }
+  // Required field validation
+  if (!amount || amount <= 0)    return { error: 'Enter a valid amount' }
+  if (!account_id)               return { error: 'Select an account' }
+  if (!category_id)              return { error: 'Please select a category' }
+  if (!merchant && !note)        return { error: 'Please add a merchant name or note' }
+  if (merchant && merchant.length > 100) return { error: 'Note must be 100 characters or less' }
+  if (!date)                     return { error: 'Select a date' }
   if (!['income', 'expense', 'transfer'].includes(type)) return { error: 'Invalid type' }
 
-  // ── Balance guard: expenses & transfers cannot exceed available balance ──
+  // Balance guard for expenses
   if (type === 'expense' || type === 'transfer') {
     const { data: acc } = await supabase.from('accounts')
       .select('balance, name').eq('id', account_id).single()
@@ -48,8 +52,7 @@ export async function addTransaction(formData: FormData): Promise<{ error?: stri
   const { data: acc } = await supabase.from('accounts').select('balance').eq('id', account_id).single()
   if (acc) {
     const delta = type === 'income' ? amount : -amount
-    const newBal = Number(acc.balance) + delta
-    await supabase.from('accounts').update({ balance: Math.max(0, newBal) }).eq('id', account_id)
+    await supabase.from('accounts').update({ balance: Math.max(0, Number(acc.balance) + delta) }).eq('id', account_id)
   }
 
   PATHS.forEach(p => revalidatePath(p))
@@ -96,6 +99,7 @@ export async function updateTransaction(id: string, formData: FormData): Promise
   const category_id = (formData.get('category_id') as string) || null
 
   if (!newAmount || newAmount <= 0) return { error: 'Enter a valid amount' }
+  if (merchant && merchant.length > 100) return { error: 'Note must be 100 characters or less' }
 
   const { data: old } = await supabase.from('transactions')
     .select('amount_in_base, account_id, type')
