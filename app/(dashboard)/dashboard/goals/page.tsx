@@ -7,11 +7,16 @@ export default async function GoalsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: goals } = await supabase
-    .from('goals')
-    .select('id, title, emoji, target_amount, saved_amount, currency, deadline, status')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+  const [{ data: goals }, { data: accounts }] = await Promise.all([
+    supabase.from('goals')
+      .select('id, title, emoji, target_amount, saved_amount, currency, deadline, status')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase.from('accounts')
+      .select('id, name, color, balance, currency')
+      .eq('user_id', user.id)
+      .order('created_at'),
+  ])
 
-  return <GoalsView goals={goals ?? []} />
+  return <GoalsView goals={goals ?? []} accounts={accounts ?? []} />
 }
