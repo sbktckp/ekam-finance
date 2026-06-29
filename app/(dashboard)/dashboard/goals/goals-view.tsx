@@ -9,7 +9,6 @@ import { CURRENCIES } from '@/lib/constants'
 type Goal    = { id: string; title: string; emoji: string; target_amount: number; saved_amount: number; currency: string; deadline: string | null; status: string }
 type Account = { id: string; name: string; color: string; balance: number; currency: string }
 
-// ─── Create goal modal ────────────────────────────────────────────────────────
 function CreateModal({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +47,8 @@ function CreateModal({ open, onClose, onSuccess }: { open: boolean; onClose: () 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Target Amount</label>
-              <input name="target_amount" type="number" step="100" min="1" required placeholder="50000"
+              {/* step="any" allows any number like 7000, 12500 etc */}
+              <input name="target_amount" type="number" step="any" min="1" required placeholder="50000"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400" />
             </div>
             <div className="space-y-1.5">
@@ -75,14 +75,12 @@ function CreateModal({ open, onClose, onSuccess }: { open: boolean; onClose: () 
   )
 }
 
-// ─── Contribute money to goal modal ──────────────────────────────────────────
 function ContributeModal({ goal, accounts, open, onClose, onSuccess }: {
   goal: Goal; accounts: Account[]; open: boolean; onClose: () => void; onSuccess: () => void
 }) {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [selAcc, setSelAcc] = useState(accounts[0]?.id ?? '')
-
   const remaining = Number(goal.target_amount) - Number(goal.saved_amount)
 
   function handleSubmit(fd: FormData) {
@@ -111,7 +109,6 @@ function ContributeModal({ goal, accounts, open, onClose, onSuccess }: {
           <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
         </div>
         <form action={handleSubmit} className="p-6 space-y-4">
-          {/* Account selector */}
           {accounts.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-4">Add an account first</p>
           ) : (
@@ -131,7 +128,7 @@ function ContributeModal({ goal, accounts, open, onClose, onSuccess }: {
               </div>
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Amount</label>
-                <input name="amount" type="number" step="100" min="1" required
+                <input name="amount" type="number" step="any" min="1" required
                   placeholder={`Max ${formatCurrency(Math.min(selectedAccBalance, remaining), goal.currency)}`}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400" />
               </div>
@@ -148,7 +145,6 @@ function ContributeModal({ goal, accounts, open, onClose, onSuccess }: {
   )
 }
 
-// ─── Main view ─────────────────────────────────────────────────────────────────
 export function GoalsView({ goals, accounts }: { goals: Goal[]; accounts: Account[] }) {
   const router = useRouter()
   const [createOpen, setCreateOpen] = useState(false)
@@ -174,10 +170,8 @@ export function GoalsView({ goals, accounts }: { goals: Goal[]; accounts: Accoun
             {goals.map(g => {
               const pct = Number(g.target_amount) > 0
                 ? Math.min((Number(g.saved_amount) / Number(g.target_amount)) * 100, 100) : 0
-              const daysLeft = g.deadline
-                ? Math.ceil((new Date(g.deadline).getTime() - Date.now()) / 86400000) : null
+              const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline).getTime() - Date.now()) / 86400000) : null
               const done = pct >= 100
-
               return (
                 <div key={g.id} className="surface-light rounded-2xl p-5">
                   <div className="flex items-start justify-between mb-4">
@@ -193,10 +187,8 @@ export function GoalsView({ goals, accounts }: { goals: Goal[]; accounts: Accoun
                     <div className="flex items-center gap-2">
                       <span className={`text-sm font-black ${done ? 'text-emerald-600' : 'text-gray-600'}`}>{Math.round(pct)}%</span>
                       {!done && (
-                        <button
-                          onClick={() => setContributeGoal(g)}
-                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg transition-colors"
-                          title="Add money">
+                        <button onClick={() => setContributeGoal(g)}
+                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg transition-colors">
                           <PiggyBank className="w-3 h-3" /> Add
                         </button>
                       )}
@@ -226,16 +218,10 @@ export function GoalsView({ goals, accounts }: { goals: Goal[]; accounts: Accoun
           </div>
         )}
       </div>
-
       <CreateModal open={createOpen} onClose={() => setCreateOpen(false)} onSuccess={() => router.refresh()} />
       {contributeGoal && (
-        <ContributeModal
-          goal={contributeGoal}
-          accounts={accounts}
-          open={!!contributeGoal}
-          onClose={() => setContributeGoal(null)}
-          onSuccess={() => router.refresh()}
-        />
+        <ContributeModal goal={contributeGoal} accounts={accounts} open={!!contributeGoal}
+          onClose={() => setContributeGoal(null)} onSuccess={() => router.refresh()} />
       )}
     </>
   )
