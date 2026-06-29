@@ -51,8 +51,9 @@ function Modal({ open, onClose, categories, onSuccess }: {
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Monthly Limit</label>
-            <input name="limit_amount" type="number" step="100" min="1" required placeholder="e.g. 10000"
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Monthly Limit (₹)</label>
+            {/* step="1" allows any integer like 4000, 5000, 10000 etc */}
+            <input name="limit_amount" type="number" step="1" min="1" required placeholder="e.g. 10000"
               className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400" />
           </div>
           {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
