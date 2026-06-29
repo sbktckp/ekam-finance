@@ -431,11 +431,11 @@ export default function LandingPage() {
               className="font-semibold transition-colors duration-150 hover:text-emerald-400 underline underline-offset-2"
               style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}
             >
-              Pakshal Tatad
+              Pakshal Tated
             </a>
           </p>
 
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>2025 Ekam Finance</p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>© 2026 Ekam Finance</p>
         </div>
       </footer>
 
