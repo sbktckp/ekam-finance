@@ -10,14 +10,13 @@ export default async function BudgetPage() {
   const now       = new Date()
   const monthStr  = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0]
-  const startOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const monthLabel = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 
   const [{ data: budgets }, { data: monthTxns }, { data: categories }] = await Promise.all([
     supabase.from('budgets').select('id, limit_amount, category_id, categories(name, icon)')
       .eq('user_id', user.id).gte('month', monthStr).lt('month', nextMonth),
     supabase.from('transactions').select('category_id, amount_in_base')
-      .eq('user_id', user.id).eq('type', 'expense').gte('date', startOfMonth),
+      .eq('user_id', user.id).eq('type', 'expense').gte('date', monthStr),
     supabase.from('categories').select('id, name, icon, type').order('name'),
   ])
 
@@ -32,7 +31,8 @@ export default async function BudgetPage() {
 
   return (
     <BudgetView
-      budgets={(budgets ?? []) as Parameters<typeof BudgetView>[0]['budgets']}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      budgets={(budgets ?? []) as unknown as Parameters<typeof BudgetView>[0]['budgets']}
       categories={categories ?? []}
       spentByCategory={spentByCategory}
       totalExpenses={totalExpenses}
