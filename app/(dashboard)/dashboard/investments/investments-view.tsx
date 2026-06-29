@@ -1,24 +1,31 @@
 'use client'
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, X } from 'lucide-react'
-import { addInvestment } from '@/app/actions/investments'
+import { Plus, X, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { addInvestment, updateInvestment, deleteInvestment } from '@/app/actions/investments'
 import { formatCurrency } from '@/lib/utils'
 import { CURRENCIES, INVESTMENT_TYPES } from '@/lib/constants'
 
 type Investment = { id: string; name: string; type: string; ticker: string | null; quantity: number; avg_buy_price: number; currency: string; current_price: number | null }
 type Account    = { id: string; name: string; color: string; balance: number; currency: string }
 
-function Modal({ open, onClose, accounts, onSuccess }: {
+const DARK = { bg: '#1c1c1e', border: 'rgba(255,255,255,0.10)', input: 'rgba(255,255,255,0.07)', inputBorder: 'rgba(255,255,255,0.13)', text: 'rgba(255,255,255,0.88)', label: 'rgba(255,255,255,0.38)' }
+
+function inputStyle() {
+  return { background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }
+}
+
+// ─── Add Investment modal ──────────────────────────────────────────────────────
+function AddModal({ open, onClose, accounts, onSuccess }: {
   open: boolean; onClose: () => void; accounts: Account[]; onSuccess: () => void
 }) {
   const [isPending, startTransition] = useTransition()
-  const [error, setError]   = useState<string | null>(null)
-  const [selAcc, setSelAcc] = useState<string>('')
-  const [qty, setQty]       = useState('')
-  const [price, setPrice]   = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [selAcc, setSelAcc] = useState('')
+  const [qty,   setQty]   = useState('')
+  const [price, setPrice] = useState('')
 
-  const totalCost = selAcc && qty && price ? Number(qty) * Number(price) : 0
+  const totalCost = qty && price ? Number(qty) * Number(price) : 0
   const selAccBal = accounts.find(a => a.id === selAcc)?.balance ?? 0
 
   function handleSubmit(fd: FormData) {
@@ -34,90 +41,73 @@ function Modal({ open, onClose, accounts, onSuccess }: {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-sm font-bold text-gray-900">Add Investment</h2>
-          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100"><X className="w-4 h-4 text-gray-500" /></button>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden" style={{ background: DARK.bg, border: `1px solid ${DARK.border}` }}>
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${DARK.border}` }}>
+          <h2 className="text-sm font-bold" style={{ color: DARK.text }}>Add Investment</h2>
+          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10"><X className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} /></button>
         </div>
         <form action={handleSubmit} className="px-6 pb-6 pt-5 space-y-4 overflow-y-auto max-h-[80vh] sm:max-h-none">
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-2 space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Name</label>
-              <input name="name" type="text" required placeholder="e.g. Reliance, NIFTY 50"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400" />
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Name</label>
+              <input name="name" type="text" required placeholder="e.g. Reliance, NIFTY 50" className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Ticker</label>
-              <input name="ticker" type="text" placeholder="RELIANCE"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 uppercase" />
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Ticker</label>
+              <input name="ticker" type="text" placeholder="RELIANCE" className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all uppercase" style={inputStyle()} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Type</label>
-            <select name="type" defaultValue="stock"
-              className="w-full px-3 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 bg-white">
+            <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Type</label>
+            <select name="type" defaultValue="stock" className="w-full px-3 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()}>
               {INVESTMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Qty</label>
-              <input name="quantity" type="number" step="0.001" min="0.001" required placeholder="1"
-                value={qty} onChange={e => setQty(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400" />
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Qty</label>
+              <input name="quantity" type="number" step="0.001" min="0.001" required placeholder="1" value={qty} onChange={e => setQty(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Buy Price</label>
-              <input name="avg_buy_price" type="number" step="0.01" min="0" required placeholder="0"
-                value={price} onChange={e => setPrice(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400" />
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Buy Price</label>
+              <input name="avg_buy_price" type="number" step="0.01" min="0" required placeholder="0" value={price} onChange={e => setPrice(e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()} />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Currency</label>
-              <select name="currency" defaultValue="INR"
-                className="w-full px-3 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 bg-white">
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Currency</label>
+              <select name="currency" defaultValue="INR" className="w-full px-3 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()}>
                 {CURRENCIES.map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
               </select>
             </div>
           </div>
-
-          {/* Account deduction */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-              Deduct from Account <span className="text-gray-300 font-normal normal-case tracking-normal">(optional)</span>
-            </label>
-            {accounts.length > 0 ? (
+          {accounts.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Deduct from Account <span style={{ color: 'rgba(255,255,255,0.25)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
               <div className="flex gap-2 flex-wrap">
                 <button type="button" onClick={() => setSelAcc('')}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${!selAcc ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
-                  No deduction
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+                  style={{ border: !selAcc ? '1px solid #10b981' : `1px solid ${DARK.inputBorder}`, background: !selAcc ? 'rgba(16,185,129,0.12)' : DARK.input, color: !selAcc ? '#34d399' : 'rgba(255,255,255,0.55)' }}>
+                  None
                 </button>
                 {accounts.map(a => (
                   <button key={a.id} type="button" onClick={() => setSelAcc(a.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${selAcc === a.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
+                    style={{ border: selAcc === a.id ? '1px solid #10b981' : `1px solid ${DARK.inputBorder}`, background: selAcc === a.id ? 'rgba(16,185,129,0.12)' : DARK.input, color: selAcc === a.id ? '#34d399' : 'rgba(255,255,255,0.65)' }}>
                     <span className="w-3 h-3 rounded-full" style={{ background: a.color }} />
-                    {a.name}
-                    <span className="opacity-60">{formatCurrency(Number(a.balance), a.currency)}</span>
+                    {a.name} <span style={{ color: 'rgba(255,255,255,0.35)' }}>{formatCurrency(Number(a.balance), a.currency)}</span>
                   </button>
                 ))}
               </div>
-            ) : (
-              <p className="text-xs text-gray-400">No accounts found. Add an account to enable deduction.</p>
-            )}
-          </div>
-
-          {/* Cost summary */}
-          {totalCost > 0 && (
-            <div className={`rounded-xl px-4 py-3 text-sm font-semibold ${selAcc && selAccBal < totalCost ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-700'}`}>
-              Total cost: {formatCurrency(totalCost, 'INR')}
-              {selAcc && <span className="ml-2 text-xs opacity-70">· Balance after: {formatCurrency(selAccBal - totalCost, 'INR')}</span>}
             </div>
           )}
-
-          {error && <p className="text-xs text-red-500 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-          <button type="submit" disabled={isPending}
-            className="w-full py-3 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ background: '#10b981' }}>
+          {totalCost > 0 && (
+            <div className="rounded-xl px-4 py-3 text-xs font-semibold" style={{ background: selAcc && selAccBal < totalCost ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.05)', color: selAcc && selAccBal < totalCost ? '#f87171' : 'rgba(255,255,255,0.6)', border: `1px solid ${DARK.inputBorder}` }}>
+              Total cost: {formatCurrency(totalCost, 'INR')}
+              {selAcc && <span className="ml-2 opacity-70">· Balance after: {formatCurrency(selAccBal - totalCost, 'INR')}</span>}
+            </div>
+          )}
+          {error && <p className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">{error}</p>}
+          <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ background: '#10b981' }}>
             {isPending ? 'Adding...' : 'Add Investment'}
           </button>
         </form>
@@ -126,18 +116,115 @@ function Modal({ open, onClose, accounts, onSuccess }: {
   )
 }
 
+// ─── Edit Investment modal ─────────────────────────────────────────────────────
+function EditModal({ inv, open, onClose, onSuccess }: {
+  inv: Investment; open: boolean; onClose: () => void; onSuccess: () => void
+}) {
+  const [isPending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    setError(null)
+    startTransition(async () => {
+      const res = await updateInvestment(inv.id, fd)
+      if (res.error) { setError(res.error); return }
+      onSuccess(); onClose()
+    })
+  }
+
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl shadow-2xl p-6" style={{ background: DARK.bg, border: `1px solid ${DARK.border}` }}>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm font-bold" style={{ color: DARK.text }}>Edit {inv.name}</p>
+          <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10"><X className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Name</label>
+              <input name="name" type="text" required defaultValue={inv.name} autoFocus className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Ticker</label>
+              <input name="ticker" type="text" defaultValue={inv.ticker ?? ''} className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all uppercase" style={inputStyle()} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Type</label>
+            <select name="type" defaultValue={inv.type} className="w-full px-3 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()}>
+              {INVESTMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Qty</label>
+              <input name="quantity" type="number" step="0.001" min="0.001" required defaultValue={Number(inv.quantity)} className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Avg Buy Price</label>
+              <input name="avg_buy_price" type="number" step="0.01" min="0" required defaultValue={Number(inv.avg_buy_price)} className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all" style={inputStyle()} />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">{error}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold" style={{ border: `1px solid ${DARK.inputBorder}`, color: 'rgba(255,255,255,0.65)' }}>Cancel</button>
+            <button type="submit" disabled={isPending} className="flex-1 py-2.5 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ background: '#10b981' }}>{isPending ? 'Saving...' : 'Save'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── Delete confirmation ───────────────────────────────────────────────────────
+function DeleteModal({ inv, open, onClose, onSuccess }: {
+  inv: Investment; open: boolean; onClose: () => void; onSuccess: () => void
+}) {
+  const [isPending, startTransition] = useTransition()
+  function handle() {
+    startTransition(async () => { await deleteInvestment(inv.id); onSuccess(); onClose() })
+  }
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl shadow-2xl p-6" style={{ background: DARK.bg, border: `1px solid ${DARK.border}` }}>
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+          </div>
+          <div>
+            <p className="text-sm font-bold" style={{ color: DARK.text }}>Delete {inv.name}?</p>
+            <p className="text-xs mt-1" style={{ color: 'rgba(255,255,255,0.45)' }}>This cannot be undone.</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl text-sm font-semibold" style={{ border: `1px solid ${DARK.inputBorder}`, color: 'rgba(255,255,255,0.65)' }}>Cancel</button>
+          <button onClick={handle} disabled={isPending} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold disabled:opacity-50">{isPending ? 'Deleting...' : 'Delete'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main view ─────────────────────────────────────────────────────────────────
 export function InvestmentsView({ investments, accounts }: { investments: Investment[]; accounts: Account[] }) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [editInv, setEditInv] = useState<Investment | null>(null)
+  const [delInv,  setDelInv]  = useState<Investment | null>(null)
+  const refresh = () => router.refresh()
 
   const totalInvested = investments.reduce((s, i) => s + Number(i.quantity) * Number(i.avg_buy_price), 0)
   const totalCurrent  = investments.reduce((s, i) => s + Number(i.quantity) * (i.current_price != null ? Number(i.current_price) : Number(i.avg_buy_price)), 0)
   const totalPnL      = totalCurrent - totalInvested
   const pnlPct        = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0
-
-  const TYPE_ICONS: Record<string, string> = {
-    stock: '📈', mutual_fund: '🏦', crypto: '₿', etf: '📊', bond: '📃', real_estate: '🏠', other: '💼'
-  }
+  const TYPE_ICONS: Record<string, string> = { stock: '📈', mutual_fund: '🏦', crypto: '₿', etf: '📊', bond: '📃', real_estate: '🏠', other: '💼' }
 
   return (
     <>
@@ -147,9 +234,7 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
             <h1 className="text-xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>Investments</h1>
             <p className="text-sm text-gray-400 mt-0.5">Your portfolio</p>
           </div>
-          <button onClick={() => setOpen(true)}
-            className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-black hover:-translate-y-px transition-all duration-150"
-            style={{ background: '#10b981' }}>
+          <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-black hover:-translate-y-px transition-all duration-150" style={{ background: '#10b981' }}>
             <Plus className="w-4 h-4" /> Add investment
           </button>
         </div>
@@ -176,6 +261,7 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
                     <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">Qty</th>
                     <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Invested</th>
                     <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">P&L</th>
+                    <th className="px-4 py-3.5 w-16"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -184,7 +270,7 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
                     const current  = Number(inv.quantity) * (inv.current_price != null ? Number(inv.current_price) : Number(inv.avg_buy_price))
                     const pnl      = current - invested
                     return (
-                      <tr key={inv.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
+                      <tr key={inv.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2.5">
                             <span className="text-lg">{TYPE_ICONS[inv.type] ?? '💼'}</span>
@@ -194,16 +280,16 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
                             </div>
                           </div>
                         </td>
+                        <td className="px-6 py-4 text-right hidden sm:table-cell"><span className="text-sm text-gray-500">{Number(inv.quantity).toLocaleString('en-IN')}</span></td>
+                        <td className="px-6 py-4 text-right"><span className="text-sm font-bold text-gray-900">{formatCurrency(invested, inv.currency)}</span></td>
                         <td className="px-6 py-4 text-right hidden sm:table-cell">
-                          <span className="text-sm text-gray-500">{Number(inv.quantity).toLocaleString('en-IN')}</span>
+                          <span className={`text-sm font-bold ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pnl >= 0 ? '+' : ''}{formatCurrency(pnl, inv.currency)}</span>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="text-sm font-bold text-gray-900">{formatCurrency(invested, inv.currency)}</span>
-                        </td>
-                        <td className="px-6 py-4 text-right hidden sm:table-cell">
-                          <span className={`text-sm font-bold ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {pnl >= 0 ? '+' : ''}{formatCurrency(pnl, inv.currency)}
-                          </span>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => setEditInv(inv)} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-50 transition-colors" title="Edit"><Pencil className="w-3 h-3" /></button>
+                            <button onClick={() => setDelInv(inv)}  className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-50 transition-colors"     title="Delete"><Trash2 className="w-3 h-3" /></button>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -217,14 +303,16 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
             <p className="text-3xl mb-3">📈</p>
             <p className="text-sm font-semibold text-gray-500">No investments tracked</p>
             <p className="text-xs text-gray-400 mt-1 mb-4">Add stocks, mutual funds, crypto and more</p>
-            <button onClick={() => setOpen(true)}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
               <Plus className="w-3.5 h-3.5" /> Add Investment
             </button>
           </div>
         )}
       </div>
-      <Modal open={open} onClose={() => setOpen(false)} accounts={accounts} onSuccess={() => router.refresh()} />
+
+      <AddModal open={addOpen} onClose={() => setAddOpen(false)} accounts={accounts} onSuccess={refresh} />
+      {editInv && <EditModal   inv={editInv} open={!!editInv} onClose={() => setEditInv(null)} onSuccess={refresh} />}
+      {delInv  && <DeleteModal inv={delInv}  open={!!delInv}  onClose={() => setDelInv(null)}  onSuccess={refresh} />}
     </>
   )
 }
