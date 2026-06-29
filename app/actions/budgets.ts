@@ -7,28 +7,58 @@ export async function addBudget(formData: FormData): Promise<{ error?: string }>
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  const category_id = (formData.get('category_id') as string) || null
+  const category_id = (formData.get('category_id') as string)
   const limit_amount = Number(formData.get('limit_amount'))
+
+  if (!category_id)                      return { error: 'Please select a category' }
   if (!limit_amount || limit_amount <= 0) return { error: 'Enter a valid amount' }
 
-  const now = new Date()
+  const now   = new Date()
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
 
-  // Upsert: if budget for this category+month exists, update it
-  if (category_id) {
-    const { data: existing } = await supabase.from('budgets').select('id')
-      .eq('user_id', user.id).eq('category_id', category_id).eq('month', month).single()
-    if (existing) {
-      const { error } = await supabase.from('budgets').update({ limit_amount }).eq('id', existing.id)
-      if (error) return { error: error.message }
-      revalidatePath('/dashboard/budget')
-      return {}
-    }
+  // Upsert: same category + same month → update, else insert
+  const { data: existing } = await supabase.from('budgets').select('id')
+    .eq('user_id', user.id).eq('category_id', category_id).eq('month', month).single()
+
+  if (existing) {
+    const { error } = await supabase.from('budgets').update({ limit_amount }).eq('id', existing.id)
+    if (error) return { error: error.message }
+  } else {
+    const { error } = await supabase.from('budgets').insert({
+      user_id: user.id, category_id, limit_amount, month,
+    })
+    if (error) return { error: error.message }
   }
 
-  const { error } = await supabase.from('budgets').insert({
-    user_id: user.id, category_id, limit_amount, month,
-  })
+  revalidatePath('/dashboard/budget')
+  return {}
+}
+
+export async function updateBudget(id: string, limit_amount: number): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  if (!limit_amount || limit_amount <= 0) return { error: 'Enter a valid amount' }
+
+  const { error } = await supabase.from('budgets')
+    .update({ limit_amount })
+    .eq('id', id).eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/dashboard/budget')
+  return {}
+}
+
+export async function deleteBudget(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase.from('budgets')
+    .delete()
+    .eq('id', id).eq('user_id', user.id)
+
   if (error) return { error: error.message }
   revalidatePath('/dashboard/budget')
   return {}
