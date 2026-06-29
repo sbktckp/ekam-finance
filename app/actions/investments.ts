@@ -13,10 +13,22 @@ export async function addInvestment(formData: FormData): Promise<{ error?: strin
   const quantity      = Number(formData.get('quantity'))
   const avg_buy_price = Number(formData.get('avg_buy_price'))
   const currency      = (formData.get('currency')       as string) || 'INR'
+  const account_id    = (formData.get('account_id')    as string) || null
 
-  if (!name)                    return { error: 'Investment name is required' }
-  if (!quantity || quantity <= 0) return { error: 'Enter a valid quantity' }
-  if (avg_buy_price < 0)        return { error: 'Enter a valid buy price' }
+  if (!name)                      return { error: 'Investment name is required' }
+  if (!quantity || quantity <= 0)  return { error: 'Enter a valid quantity' }
+  if (avg_buy_price < 0)           return { error: 'Enter a valid buy price' }
+
+  // Deduct total cost from account if provided
+  if (account_id) {
+    const totalCost = quantity * avg_buy_price
+    const { data: acc } = await supabase.from('accounts').select('balance, name').eq('id', account_id).single()
+    if (!acc) return { error: 'Account not found' }
+    if (Number(acc.balance) < totalCost) return { error: `Insufficient balance in ${acc.name}` }
+    await supabase.from('accounts')
+      .update({ balance: Number(acc.balance) - totalCost })
+      .eq('id', account_id)
+  }
 
   const { error } = await supabase.from('investments').insert({
     user_id: user.id, name, type, ticker, quantity, avg_buy_price, currency,
