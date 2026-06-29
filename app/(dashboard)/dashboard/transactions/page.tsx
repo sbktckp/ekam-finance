@@ -12,8 +12,9 @@ export default async function TransactionsPage() {
     { data: accounts },
     { data: categories },
   ] = await Promise.all([
+    // No JOIN — avoid Supabase TypeScript inference issue; category matched in view by category_id
     supabase.from('transactions')
-      .select('id, date, merchant, note, type, amount_in_base, currency, categories(name, icon)')
+      .select('id, date, merchant, note, type, amount, amount_in_base, currency, category_id, account_id')
       .eq('user_id', user.id)
       .order('date', { ascending: false })
       .limit(100),
@@ -28,8 +29,7 @@ export default async function TransactionsPage() {
 
   return (
     <TransactionsView
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      transactions={(transactions ?? []) as unknown as Parameters<typeof TransactionsView>[0]['transactions']}
+      transactions={transactions ?? []}
       accounts={accounts ?? []}
       categories={categories ?? []}
     />
