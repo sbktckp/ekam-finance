@@ -31,21 +31,15 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
   const currency = selectedAccount?.currency ?? 'INR'
   const balance  = selectedAccount?.balance ?? null
 
+  // Show ALL categories matching the current type — same set used in Budget
   const filteredCats = categories.filter(
     c => c.type === txnType || c.type === 'both' || !c.type
   )
 
   function handleSubmit(formData: FormData) {
-    // Client-side required checks
-    if (!selectedCat) {
-      setError('Please select a category')
-      return
-    }
+    if (!selectedCat) { setError('Please select a category'); return }
     const note = (formData.get('merchant') as string)?.trim()
-    if (!note) {
-      setError('Please add a merchant name or note')
-      return
-    }
+    if (!note) { setError('Please add a merchant name or note'); return }
 
     formData.set('type',        txnType)
     formData.set('category_id', selectedCat)
@@ -55,10 +49,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
     startTransition(async () => {
       const res = await addTransaction(formData)
       if (res.error) { setError(res.error); return }
-      setSelectedCat('')
-      setNoteLen(0)
-      onClose()
-      router.refresh()
+      setSelectedCat(''); setNoteLen(0); onClose(); router.refresh()
     })
   }
 
@@ -91,28 +82,24 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                 </button>
               ))}
             </div>
-            <button onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors flex-shrink-0">
+            <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors flex-shrink-0">
               <X className="w-4 h-4 text-gray-500" />
             </button>
           </div>
 
-          <form action={handleSubmit} className="px-6 pb-6 pt-4 space-y-4 overflow-y-auto max-h-[80vh] sm:max-h-none">
+          <form action={handleSubmit} className="px-6 pb-6 pt-4 space-y-4 overflow-y-auto max-h-[85vh]">
 
-            {/* Amount — clears error on change */}
+            {/* Amount */}
             <div>
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Amount</label>
               <div className="flex items-baseline gap-1 mt-1">
                 <span className="text-xl font-black text-gray-300">
                   {currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency}
                 </span>
-                <input
-                  name="amount" type="number" step="any" min="0.01" required
-                  placeholder="0"
+                <input name="amount" type="number" step="any" min="0.01" required placeholder="0"
                   onChange={() => setError(null)}
                   className="flex-1 text-4xl font-black text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  style={{ letterSpacing: '-0.04em' }}
-                />
+                  style={{ letterSpacing: '-0.04em' }} />
               </div>
               <div className="h-px bg-gray-100 mt-2" />
             </div>
@@ -127,7 +114,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
               </div>
             ) : (
               <>
-                {/* Account — shows balance */}
+                {/* Account */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Account</label>
@@ -143,9 +130,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                         onClick={() => { setAccountId(a.id); setError(null) }}
                         className={cn(
                           'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold whitespace-nowrap transition-all duration-150 flex-shrink-0',
-                          accountId === a.id
-                            ? 'border-gray-900 bg-gray-900 text-white'
-                            : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                          accountId === a.id ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-300'
                         )}>
                         <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ background: a.color }} />
                         {a.name}
@@ -159,7 +144,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                   </div>
                 </div>
 
-                {/* Category — REQUIRED */}
+                {/* Category — ALL categories, scrollable, matches Budget exactly */}
                 {filteredCats.length > 0 && (
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
@@ -171,8 +156,9 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                           className="text-[10px] text-gray-400 hover:text-gray-600 underline">clear</button>
                       )}
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {filteredCats.slice(0, 8).map(cat => (
+                    {/* Scrollable grid — shows ALL expense categories, same as Budget */}
+                    <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-0.5">
+                      {filteredCats.map(cat => (
                         <button key={cat.id} type="button"
                           onClick={() => { setSelectedCat(cat.id === selectedCat ? '' : cat.id); setError(null) }}
                           className={cn(
@@ -192,22 +178,18 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                   </div>
                 )}
 
-                {/* Note — REQUIRED, max 100 chars */}
+                {/* Note */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                       {isExpense ? 'Merchant / Note' : 'Source / Note'}
                       <span className="text-red-400 ml-0.5">*</span>
                     </label>
-                    <span className={cn(
-                      'text-[10px] font-medium',
-                      noteLen > 90 ? 'text-red-400' : noteLen > 70 ? 'text-amber-400' : 'text-gray-300'
-                    )}>
+                    <span className={cn('text-[10px] font-medium', noteLen > 90 ? 'text-red-400' : noteLen > 70 ? 'text-amber-400' : 'text-gray-300')}>
                       {noteLen}/100
                     </span>
                   </div>
-                  <input
-                    name="merchant" type="text" maxLength={100}
+                  <input name="merchant" type="text" maxLength={100}
                     placeholder={isExpense ? 'e.g. Swiggy, Rent...' : 'e.g. Salary, Freelance...'}
                     onChange={e => { setNoteLen(e.target.value.length); setError(null) }}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 transition-all" />
@@ -216,12 +198,10 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                 {/* Date */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Date</label>
-                  <input name="date" type="date" required
-                    defaultValue={new Date().toISOString().split('T')[0]}
+                  <input name="date" type="date" required defaultValue={new Date().toISOString().split('T')[0]}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 transition-all" />
                 </div>
 
-                {/* Error */}
                 {error && (
                   <div className="flex items-start gap-2 bg-red-50 border border-red-100 px-3 py-2.5 rounded-xl">
                     <span className="text-red-500 mt-0.5 flex-shrink-0">⚠</span>
@@ -229,7 +209,6 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                   </div>
                 )}
 
-                {/* Submit */}
                 <button type="submit" disabled={isPending}
                   className={cn(
                     'w-full py-3 rounded-xl text-sm font-bold transition-all duration-150 hover:-translate-y-px hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed',
