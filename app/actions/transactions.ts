@@ -27,12 +27,11 @@ export async function addTransaction(formData: FormData): Promise<{ error?: stri
     category_id,
     type,
     amount,
-    amount_in_base: amount, // single-currency for now
+    amount_in_base: amount,
     currency,
     merchant,
     note,
     date,
-    status: 'completed',
   })
 
   if (error) return { error: error.message }
