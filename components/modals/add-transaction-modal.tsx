@@ -20,11 +20,12 @@ interface Props {
 export function AddTransactionModal({ open, onClose, accounts, categories }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [error, setError]           = useState<string | null>(null)
-  const [txnType, setTxnType]       = useState<'expense' | 'income'>('expense')
+  const [error, setError]             = useState<string | null>(null)
+  const [txnType, setTxnType]         = useState<'expense' | 'income'>('expense')
   const [selectedCat, setSelectedCat] = useState('')
-  const [accountId, setAccountId]   = useState(accounts[0]?.id ?? '')
-  const [addAccOpen, setAddAccOpen] = useState(false)
+  const [accountId, setAccountId]     = useState(accounts[0]?.id ?? '')
+  const [addAccOpen, setAddAccOpen]   = useState(false)
+  const [noteLen, setNoteLen]         = useState(0)
 
   const selectedAccount = accounts.find(a => a.id === accountId)
   const currency = selectedAccount?.currency ?? 'INR'
@@ -35,6 +36,17 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
   )
 
   function handleSubmit(formData: FormData) {
+    // Client-side required checks
+    if (!selectedCat) {
+      setError('Please select a category')
+      return
+    }
+    const note = (formData.get('merchant') as string)?.trim()
+    if (!note) {
+      setError('Please add a merchant name or note')
+      return
+    }
+
     formData.set('type',        txnType)
     formData.set('category_id', selectedCat)
     formData.set('account_id',  accountId)
@@ -44,6 +56,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
       const res = await addTransaction(formData)
       if (res.error) { setError(res.error); return }
       setSelectedCat('')
+      setNoteLen(0)
       onClose()
       router.refresh()
     })
@@ -62,12 +75,12 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
             <div className="w-10 h-1 rounded-full bg-gray-200" />
           </div>
 
-          {/* Income / Expense toggle */}
+          {/* Toggle */}
           <div className="px-6 pt-5 pb-0 flex items-center justify-between gap-3">
             <div className="flex gap-1.5 p-1 bg-gray-100 rounded-xl flex-1">
               {(['expense', 'income'] as const).map(t => (
                 <button key={t} type="button"
-                  onClick={() => { setTxnType(t); setSelectedCat('') }}
+                  onClick={() => { setTxnType(t); setSelectedCat(''); setError(null) }}
                   className={cn(
                     'flex-1 py-2 rounded-lg text-xs font-bold transition-all duration-150',
                     txnType === t
@@ -84,9 +97,9 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
             </button>
           </div>
 
-          <form action={handleSubmit} className="px-6 pb-6 pt-4 space-y-4 overflow-y-auto max-h-[75vh] sm:max-h-none">
+          <form action={handleSubmit} className="px-6 pb-6 pt-4 space-y-4 overflow-y-auto max-h-[80vh] sm:max-h-none">
 
-            {/* Amount */}
+            {/* Amount — clears error on change */}
             <div>
               <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Amount</label>
               <div className="flex items-baseline gap-1 mt-1">
@@ -96,6 +109,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                 <input
                   name="amount" type="number" step="any" min="0.01" required
                   placeholder="0"
+                  onChange={() => setError(null)}
                   className="flex-1 text-4xl font-black text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ letterSpacing: '-0.04em' }}
                 />
@@ -113,7 +127,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
               </div>
             ) : (
               <>
-                {/* Account selector — shows balance */}
+                {/* Account — shows balance */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Account</label>
@@ -125,7 +139,8 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                   </div>
                   <div className="flex gap-2 overflow-x-auto pb-0.5 -mx-0.5 px-0.5">
                     {accounts.map(a => (
-                      <button key={a.id} type="button" onClick={() => setAccountId(a.id)}
+                      <button key={a.id} type="button"
+                        onClick={() => { setAccountId(a.id); setError(null) }}
                         className={cn(
                           'flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-semibold whitespace-nowrap transition-all duration-150 flex-shrink-0',
                           accountId === a.id
@@ -144,21 +159,22 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                   </div>
                 </div>
 
-                {/* Category — optional */}
+                {/* Category — REQUIRED */}
                 {filteredCats.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Category</label>
-                      <span className="text-[10px] text-gray-300 font-medium">optional</span>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                        Category <span className="text-red-400 ml-0.5">*</span>
+                      </label>
                       {selectedCat && (
                         <button type="button" onClick={() => setSelectedCat('')}
-                          className="text-[10px] text-gray-400 hover:text-gray-600 underline ml-auto">clear</button>
+                          className="text-[10px] text-gray-400 hover:text-gray-600 underline">clear</button>
                       )}
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       {filteredCats.slice(0, 8).map(cat => (
                         <button key={cat.id} type="button"
-                          onClick={() => setSelectedCat(cat.id === selectedCat ? '' : cat.id)}
+                          onClick={() => { setSelectedCat(cat.id === selectedCat ? '' : cat.id); setError(null) }}
                           className={cn(
                             'flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-all duration-150',
                             selectedCat === cat.id
@@ -170,16 +186,30 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                         </button>
                       ))}
                     </div>
+                    {!selectedCat && (
+                      <p className="text-[10px] text-gray-400 pl-0.5">Tap a category to select</p>
+                    )}
                   </div>
                 )}
 
-                {/* Merchant / Source */}
+                {/* Note — REQUIRED, max 100 chars */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                    {isExpense ? 'Merchant / Note' : 'Source'}
-                  </label>
-                  <input name="merchant" type="text"
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                      {isExpense ? 'Merchant / Note' : 'Source / Note'}
+                      <span className="text-red-400 ml-0.5">*</span>
+                    </label>
+                    <span className={cn(
+                      'text-[10px] font-medium',
+                      noteLen > 90 ? 'text-red-400' : noteLen > 70 ? 'text-amber-400' : 'text-gray-300'
+                    )}>
+                      {noteLen}/100
+                    </span>
+                  </div>
+                  <input
+                    name="merchant" type="text" maxLength={100}
                     placeholder={isExpense ? 'e.g. Swiggy, Rent...' : 'e.g. Salary, Freelance...'}
+                    onChange={e => { setNoteLen(e.target.value.length); setError(null) }}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 transition-all" />
                 </div>
 
@@ -194,7 +224,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                 {/* Error */}
                 {error && (
                   <div className="flex items-start gap-2 bg-red-50 border border-red-100 px-3 py-2.5 rounded-xl">
-                    <span className="text-red-500 mt-0.5">⚠</span>
+                    <span className="text-red-500 mt-0.5 flex-shrink-0">⚠</span>
                     <p className="text-xs text-red-600 font-medium">{error}</p>
                   </div>
                 )}
