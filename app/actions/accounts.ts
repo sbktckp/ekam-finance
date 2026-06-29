@@ -11,13 +11,12 @@ export async function addAccount(formData: FormData): Promise<{ error?: string }
   if (!name) return { error: 'Account name is required' }
 
   const { error } = await supabase.from('accounts').insert({
-    user_id: user.id,
+    user_id:  user.id,
     name,
     type:     formData.get('type')     as string || 'savings',
     balance:  Number(formData.get('balance') ?? 0),
     currency: formData.get('currency') as string || 'INR',
     color:    formData.get('color')    as string || '#10b981',
-    is_active: true,
   })
 
   if (error) return { error: error.message }
