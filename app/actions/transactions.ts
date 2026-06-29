@@ -23,16 +23,33 @@ export async function addTransaction(formData: FormData): Promise<{ error?: stri
   if (!date)                  return { error: 'Select a date' }
   if (!['income', 'expense', 'transfer'].includes(type)) return { error: 'Invalid type' }
 
+  // ── Balance guard: expenses & transfers cannot exceed available balance ──
+  if (type === 'expense' || type === 'transfer') {
+    const { data: acc } = await supabase.from('accounts')
+      .select('balance, name').eq('id', account_id).single()
+    if (acc) {
+      const available = Number(acc.balance)
+      if (amount > available) {
+        const fmt = new Intl.NumberFormat('en-IN', {
+          style: 'currency', currency, minimumFractionDigits: 0,
+        }).format(available)
+        return { error: `Insufficient balance in ${acc.name}. Available: ${fmt}` }
+      }
+    }
+  }
+
   const { error } = await supabase.from('transactions').insert({
     user_id: user.id, account_id, category_id, type,
     amount, amount_in_base: amount, currency, merchant, note, date,
   })
   if (error) return { error: error.message }
 
+  // Sync account balance
   const { data: acc } = await supabase.from('accounts').select('balance').eq('id', account_id).single()
   if (acc) {
     const delta = type === 'income' ? amount : -amount
-    await supabase.from('accounts').update({ balance: Number(acc.balance) + delta }).eq('id', account_id)
+    const newBal = Number(acc.balance) + delta
+    await supabase.from('accounts').update({ balance: Math.max(0, newBal) }).eq('id', account_id)
   }
 
   PATHS.forEach(p => revalidatePath(p))
@@ -44,19 +61,19 @@ export async function deleteTransaction(id: string): Promise<{ error?: string }>
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
-  // Fetch to reverse balance
   const { data: txn } = await supabase.from('transactions')
     .select('amount_in_base, type, account_id')
     .eq('id', id).eq('user_id', user.id).single()
 
   if (!txn) return { error: 'Not found' }
 
-  // Reverse account balance
   if (txn.account_id) {
     const { data: acc } = await supabase.from('accounts').select('balance').eq('id', txn.account_id).single()
     if (acc) {
       const reversal = txn.type === 'income' ? -Number(txn.amount_in_base) : Number(txn.amount_in_base)
-      await supabase.from('accounts').update({ balance: Number(acc.balance) + reversal }).eq('id', txn.account_id)
+      await supabase.from('accounts')
+        .update({ balance: Math.max(0, Number(acc.balance) + reversal) })
+        .eq('id', txn.account_id)
     }
   }
 
@@ -84,15 +101,16 @@ export async function updateTransaction(id: string, formData: FormData): Promise
     .select('amount_in_base, account_id, type')
     .eq('id', id).eq('user_id', user.id).single()
 
-  if (!old)              return { error: 'Transaction not found' }
+  if (!old)                  return { error: 'Transaction not found' }
   if (old.type !== 'income') return { error: 'Only income transactions can be edited' }
 
-  // Adjust account balance by the delta
   if (old.account_id) {
     const { data: acc } = await supabase.from('accounts').select('balance').eq('id', old.account_id).single()
     if (acc) {
       const delta = newAmount - Number(old.amount_in_base)
-      await supabase.from('accounts').update({ balance: Number(acc.balance) + delta }).eq('id', old.account_id)
+      await supabase.from('accounts')
+        .update({ balance: Math.max(0, Number(acc.balance) + delta) })
+        .eq('id', old.account_id)
     }
   }
 
