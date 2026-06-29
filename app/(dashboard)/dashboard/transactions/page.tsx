@@ -20,7 +20,6 @@ export default async function TransactionsPage() {
       .from('accounts')
       .select('id, name, color, type, currency, balance')
       .eq('user_id', user!.id)
-      .eq('is_active', true)
       .order('created_at'),
     supabase
       .from('categories')
