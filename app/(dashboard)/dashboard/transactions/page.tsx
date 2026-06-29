@@ -28,7 +28,8 @@ export default async function TransactionsPage() {
 
   return (
     <TransactionsView
-      transactions={transactions ?? []}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      transactions={(transactions ?? []) as unknown as Parameters<typeof TransactionsView>[0]['transactions']}
       accounts={accounts ?? []}
       categories={categories ?? []}
     />
