@@ -7,12 +7,13 @@ export default async function BillsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const [{ data: bills }, { data: categories }] = await Promise.all([
+  const [{ data: bills }, { data: categories }, { data: accounts }] = await Promise.all([
     supabase.from('bills')
       .select('id, name, amount, currency, recurrence, due_day, next_due_date, is_active, categories(name, icon)')
       .eq('user_id', user.id).eq('is_active', true)
       .order('next_due_date', { ascending: true }),
     supabase.from('categories').select('id, name, icon, type').order('name'),
+    supabase.from('accounts').select('id, name, color, balance, currency').eq('user_id', user.id).order('created_at'),
   ])
 
   return (
@@ -20,6 +21,7 @@ export default async function BillsPage() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       bills={(bills ?? []) as unknown as Parameters<typeof BillsView>[0]['bills']}
       categories={categories ?? []}
+      accounts={accounts ?? []}
     />
   )
 }
