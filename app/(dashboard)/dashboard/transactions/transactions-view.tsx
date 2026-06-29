@@ -36,14 +36,13 @@ export function TransactionsView({ transactions, accounts, categories }: Props) 
             <p className="text-sm text-gray-400 mt-0.5">Track your income and expenses</p>
           </div>
           <div className="flex gap-2">
-            {accounts.length === 0 && (
-              <button
-                onClick={() => setAccOpen(true)}
-                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:border-gray-300 transition-all"
-              >
-                <Plus className="w-4 h-4" /> Account
-              </button>
-            )}
+            {/* Always show Add Account */}
+            <button
+              onClick={() => setAccOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all"
+            >
+              <Plus className="w-4 h-4" /> Account
+            </button>
             <button
               onClick={() => setTxnOpen(true)}
               className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl transition-all duration-150 hover:-translate-y-px hover:shadow-md hover:shadow-emerald-500/20 text-black"
@@ -126,7 +125,6 @@ export function TransactionsView({ transactions, accounts, categories }: Props) 
         </div>
       </div>
 
-      {/* Modals */}
       <AddTransactionModal
         open={txnOpen}
         onClose={() => setTxnOpen(false)}
