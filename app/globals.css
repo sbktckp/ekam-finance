@@ -23,27 +23,22 @@
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-10px); }
 }
-
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-
 @keyframes shimmer {
   from { background-position: -300% center; }
   to   { background-position:  300% center; }
 }
-
 @keyframes marquee {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
-
 @keyframes breathe {
   0%, 100% { opacity: 0.5; }
   50%       { opacity: 0.9; }
@@ -103,3 +98,72 @@
   transform: translateY(-1px);
   box-shadow: 0 8px 28px rgba(0,0,0,0.09);
 }
+
+/* ── Dashboard dark theme (.dk wrapper) ──────────────────────────────────── */
+.dk { color: rgba(255,255,255,0.88); }
+
+/* Text overrides */
+.dk .text-gray-900 { color: rgba(255,255,255,0.92) !important; }
+.dk .text-gray-800 { color: rgba(255,255,255,0.85) !important; }
+.dk .text-gray-700 { color: rgba(255,255,255,0.72) !important; }
+.dk .text-gray-600 { color: rgba(255,255,255,0.62) !important; }
+.dk .text-gray-500 { color: rgba(255,255,255,0.48) !important; }
+.dk .text-gray-400 { color: rgba(255,255,255,0.36) !important; }
+.dk .text-gray-300 { color: rgba(255,255,255,0.26) !important; }
+.dk .text-gray-200 { color: rgba(255,255,255,0.18) !important; }
+
+/* Surface & cards */
+.dk .surface-light {
+  background: rgba(255,255,255,0.042) !important;
+  border: 1px solid rgba(255,255,255,0.07) !important;
+}
+.dk .surface-light:hover {
+  background: rgba(255,255,255,0.065) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45) !important;
+}
+
+/* White/gray backgrounds → dark */
+.dk .bg-white   { background: #1c1c1e !important; }
+.dk .bg-gray-50 { background: rgba(255,255,255,0.03) !important; }
+.dk .bg-gray-100 { background: rgba(255,255,255,0.07) !important; }
+.dk .bg-gray-200 { background: rgba(255,255,255,0.11) !important; }
+.dk .bg-red-50  { background: rgba(239,68,68,0.12) !important; }
+.dk .bg-emerald-50 { background: rgba(16,185,129,0.11) !important; }
+.dk .bg-amber-50   { background: rgba(245,158,11,0.11) !important; }
+.dk .bg-blue-50    { background: rgba(59,130,246,0.11) !important; }
+
+/* Borders */
+.dk .border-gray-50  { border-color: rgba(255,255,255,0.05) !important; }
+.dk .border-gray-100 { border-color: rgba(255,255,255,0.08) !important; }
+.dk .border-gray-200 { border-color: rgba(255,255,255,0.11) !important; }
+
+/* Hover states */
+.dk .hover\:bg-gray-50:hover,
+.dk .hover\:bg-gray-50\/60:hover { background: rgba(255,255,255,0.04) !important; }
+.dk .hover\:bg-gray-100:hover    { background: rgba(255,255,255,0.09) !important; }
+.dk .hover\:bg-emerald-50:hover  { background: rgba(16,185,129,0.13) !important; }
+.dk .hover\:bg-red-50:hover      { background: rgba(239,68,68,0.13) !important; }
+.dk .hover\:border-gray-300:hover { border-color: rgba(255,255,255,0.20) !important; }
+.dk .hover\:border-gray-200:hover { border-color: rgba(255,255,255,0.14) !important; }
+
+/* Inputs, selects */
+.dk input[type="text"],
+.dk input[type="number"],
+.dk input[type="date"],
+.dk input[type="email"],
+.dk input[type="password"],
+.dk select,
+.dk textarea {
+  background: rgba(255,255,255,0.07) !important;
+  border-color: rgba(255,255,255,0.13) !important;
+  color: rgba(255,255,255,0.88) !important;
+}
+.dk input::placeholder,
+.dk textarea::placeholder { color: rgba(255,255,255,0.22) !important; }
+.dk select option { background: #1c1c1e; color: rgba(255,255,255,0.88); }
+
+/* Tables */
+.dk table { color: rgba(255,255,255,0.88); }
+
+/* Focus rings */
+.dk .focus\:border-emerald-400:focus { border-color: #34d399 !important; }
