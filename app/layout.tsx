@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: 'Ekam Finance',
   description: 'One place for all your finances',
   manifest: '/manifest.json',
+  icons: { icon: '/logo.png', shortcut: '/logo.png', apple: '/logo.png' },
 }
 
 export default function RootLayout({
