@@ -124,9 +124,11 @@ interface Props {
   transactions: Txn[]
   accounts:     Account[]
   categories:   Category[]
+  budgetByCategory: Record<string, number>
+  spentByCategory:  Record<string, number>
 }
 
-export function TransactionsView({ transactions, accounts, categories }: Props) {
+export function TransactionsView({ transactions, accounts, categories, budgetByCategory, spentByCategory }: Props) {
   const router = useRouter()
   const [txnOpen, setTxnOpen]  = useState(false)
   const [accOpen, setAccOpen]  = useState(false)
@@ -352,7 +354,7 @@ export function TransactionsView({ transactions, accounts, categories }: Props) 
 
       {editTxn && <EditModal txn={editTxn} categories={categories} open={!!editTxn} onClose={() => setEditTxn(null)} onSuccess={() => router.refresh()} />}
       <DeleteModal open={!!delTxn} onClose={() => setDelTxn(null)} onConfirm={handleDelete} isPending={isDeleting} />
-      <AddTransactionModal open={txnOpen} onClose={() => setTxnOpen(false)} accounts={accounts} categories={categories} />
+      <AddTransactionModal open={txnOpen} onClose={() => setTxnOpen(false)} accounts={accounts} categories={categories} budgetByCategory={budgetByCategory} spentByCategory={spentByCategory} />
       <AddAccountModal open={accOpen} onClose={() => setAccOpen(false)} />
     </>
   )
