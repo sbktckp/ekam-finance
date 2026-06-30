@@ -252,6 +252,12 @@ export default function LandingPage() {
               style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}>
               Smit Bharat Patil
             </a>
+            {' '}under the guidance of{' '}
+            <a href="https://www.linkedin.com/in/pakshal-tated-706155318/" target="_blank" rel="noopener noreferrer"
+              className="font-semibold transition-colors duration-150 hover:text-emerald-400 underline underline-offset-2"
+              style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}>
+              Pakshal Tated
+            </a>
           </p>
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>© 2026 Ekam Finance</p>
         </div>
