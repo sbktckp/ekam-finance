@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { X, Plus } from 'lucide-react'
+import { X, Plus, AlertTriangle } from 'lucide-react'
 import { addTransaction } from '@/app/actions/transactions'
 import { cn, formatCurrency } from '@/lib/utils'
 import { AddAccountModal } from './add-account-modal'
@@ -15,9 +15,11 @@ interface Props {
   onClose:    () => void
   accounts:   Account[]
   categories: Category[]
+  budgetByCategory?: Record<string, number>
+  spentByCategory?:  Record<string, number>
 }
 
-export function AddTransactionModal({ open, onClose, accounts, categories }: Props) {
+export function AddTransactionModal({ open, onClose, accounts, categories, budgetByCategory = {}, spentByCategory = {} }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError]             = useState<string | null>(null)
@@ -26,6 +28,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
   const [accountId, setAccountId]     = useState(accounts[0]?.id ?? '')
   const [addAccOpen, setAddAccOpen]   = useState(false)
   const [noteLen, setNoteLen]         = useState(0)
+  const [amount, setAmount]           = useState('')
 
   const selectedAccount = accounts.find(a => a.id === accountId)
   const currency = selectedAccount?.currency ?? 'INR'
@@ -35,6 +38,15 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
   const filteredCats = categories.filter(
     c => c.type === txnType || c.type === 'both' || !c.type
   )
+
+  // ── Category budget warning (non-blocking) ─────────────────────────────────
+  const catLimit  = selectedCat ? budgetByCategory[selectedCat] : undefined
+  const catSpent  = selectedCat ? (spentByCategory[selectedCat] ?? 0) : 0
+  const amountNum = Number(amount) || 0
+  const projected = catSpent + amountNum
+  const catRemaining = catLimit !== undefined ? catLimit - catSpent : undefined
+  const wouldExceed  = txnType === 'expense' && catLimit !== undefined && amountNum > 0 && projected > catLimit
+  const isNearLimit   = txnType === 'expense' && catLimit !== undefined && amountNum > 0 && !wouldExceed && projected / catLimit >= 0.8
 
   function handleSubmit(formData: FormData) {
     if (!selectedCat) { setError('Please select a category'); return }
@@ -49,7 +61,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
     startTransition(async () => {
       const res = await addTransaction(formData)
       if (res.error) { setError(res.error); return }
-      setSelectedCat(''); setNoteLen(0); onClose(); router.refresh()
+      setSelectedCat(''); setNoteLen(0); setAmount(''); onClose(); router.refresh()
     })
   }
 
@@ -97,7 +109,8 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                   {currency === 'INR' ? '₹' : currency === 'USD' ? '$' : currency}
                 </span>
                 <input name="amount" type="number" step="any" min="0.01" required placeholder="0"
-                  onChange={() => setError(null)}
+                  value={amount}
+                  onChange={e => { setAmount(e.target.value); setError(null) }}
                   className="flex-1 text-4xl font-black text-gray-900 bg-transparent border-none outline-none placeholder:text-gray-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   style={{ letterSpacing: '-0.04em' }} />
               </div>
@@ -158,23 +171,46 @@ export function AddTransactionModal({ open, onClose, accounts, categories }: Pro
                     </div>
                     {/* Scrollable grid — shows ALL expense categories, same as Budget */}
                     <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-0.5">
-                      {filteredCats.map(cat => (
-                        <button key={cat.id} type="button"
-                          onClick={() => { setSelectedCat(cat.id === selectedCat ? '' : cat.id); setError(null) }}
-                          className={cn(
-                            'flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-all duration-150',
-                            selectedCat === cat.id
-                              ? isExpense ? 'border-red-300 bg-red-50' : 'border-emerald-400 bg-emerald-50'
-                              : 'border-gray-100 hover:border-gray-200 bg-gray-50/60'
-                          )}>
-                          <span className="text-lg leading-none">{cat.icon}</span>
-                          <span className="text-[10px] font-semibold text-gray-600 leading-tight">{cat.name}</span>
-                        </button>
-                      ))}
+                      {filteredCats.map(cat => {
+                        const limit = budgetByCategory[cat.id]
+                        const spent = spentByCategory[cat.id] ?? 0
+                        const over  = limit !== undefined && spent >= limit
+                        return (
+                          <button key={cat.id} type="button"
+                            onClick={() => { setSelectedCat(cat.id === selectedCat ? '' : cat.id); setError(null) }}
+                            className={cn(
+                              'relative flex flex-col items-center gap-1 px-2 py-2.5 rounded-xl border text-center transition-all duration-150',
+                              selectedCat === cat.id
+                                ? isExpense ? 'border-red-300 bg-red-50' : 'border-emerald-400 bg-emerald-50'
+                                : 'border-gray-100 hover:border-gray-200 bg-gray-50/60'
+                            )}>
+                            {over && isExpense && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-red-400" />}
+                            <span className="text-lg leading-none">{cat.icon}</span>
+                            <span className="text-[10px] font-semibold text-gray-600 leading-tight">{cat.name}</span>
+                          </button>
+                        )
+                      })}
                     </div>
                     {!selectedCat && (
                       <p className="text-[10px] text-gray-400 pl-0.5">Tap a category to select</p>
                     )}
+                  </div>
+                )}
+
+                {/* Category budget warning — non-blocking */}
+                {isExpense && selectedCat && catLimit !== undefined && (
+                  <div className={cn(
+                    'flex items-start gap-2 px-3 py-2.5 rounded-xl border',
+                    wouldExceed ? 'bg-red-50 border-red-100' : isNearLimit ? 'bg-amber-50 border-amber-100' : 'bg-gray-50 border-gray-100'
+                  )}>
+                    <AlertTriangle className={cn('w-3.5 h-3.5 mt-0.5 flex-shrink-0', wouldExceed ? 'text-red-500' : isNearLimit ? 'text-amber-500' : 'text-gray-400')} />
+                    <p className={cn('text-xs font-medium', wouldExceed ? 'text-red-600' : isNearLimit ? 'text-amber-700' : 'text-gray-500')}>
+                      {wouldExceed
+                        ? <>This will put you <strong>{formatCurrency(projected - catLimit, 'INR')} over</strong> your category budget ({formatCurrency(catLimit, 'INR')}).</>
+                        : amountNum > 0
+                        ? <>After this, you&apos;ll have <strong>{formatCurrency(catLimit - projected, 'INR')}</strong> left of your {formatCurrency(catLimit, 'INR')} budget.</>
+                        : <>{formatCurrency(catRemaining ?? 0, 'INR')} left of {formatCurrency(catLimit, 'INR')} budget for this category.</>}
+                    </p>
                   </div>
                 )}
 
