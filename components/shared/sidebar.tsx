@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, ArrowLeftRight, Calculator, TrendingUp,
-  Target, CalendarClock, BarChart3, Settings, LogOut,
+  Target, CalendarClock, BarChart3, Settings, LogOut, Wallet,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { Logo } from '@/components/shared/logo'
@@ -12,6 +12,7 @@ import { Logo } from '@/components/shared/logo'
 const NAV = [
   { label: 'Dashboard',    href: '/dashboard',              icon: LayoutDashboard },
   { label: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight  },
+  { label: 'Accounts',     href: '/dashboard/accounts',     icon: Wallet          },
   { label: 'Budget',       href: '/dashboard/budget',       icon: Calculator      },
   { label: 'Investments',  href: '/dashboard/investments',  icon: TrendingUp      },
   { label: 'Goals',        href: '/dashboard/goals',        icon: Target          },
@@ -47,7 +48,6 @@ export function Sidebar() {
       className="fixed inset-y-0 left-0 w-60 flex flex-col z-50"
       style={{ background: '#0d0d0d', borderRight: '1px solid rgba(255,255,255,0.055)' }}
     >
-      {/* Logo */}
       <div className="px-5 h-[58px] flex items-center" style={{ borderBottom: '1px solid rgba(255,255,255,0.055)' }}>
         <Link href="/" className="flex items-center gap-2.5 group">
           <Logo size={26} />
@@ -57,7 +57,6 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Nav links */}
       <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto">
         {NAV.map(({ label, href, icon: Icon }) => (
           <Link
@@ -78,7 +77,6 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Bottom */}
       <div className="px-2.5 py-3 space-y-0.5" style={{ borderTop: '1px solid rgba(255,255,255,0.055)' }}>
         <Link
           href="/dashboard/settings"
