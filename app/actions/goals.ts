@@ -36,28 +36,39 @@ export async function addGoalContribution(formData: FormData): Promise<{ error?:
   const account_id = formData.get('account_id') as string
   const amount     = Number(formData.get('amount'))
 
-  if (!goal_id)              return { error: 'Goal not found' }
-  if (!account_id)           return { error: 'Select an account' }
+  if (!goal_id)               return { error: 'Goal not found' }
+  if (!account_id)            return { error: 'Select an account' }
   if (!amount || amount <= 0) return { error: 'Enter a valid amount' }
 
   const [{ data: acc }, { data: goal }] = await Promise.all([
     supabase.from('accounts').select('balance, name').eq('id', account_id).single(),
-    supabase.from('goals').select('saved_amount, title').eq('id', goal_id).eq('user_id', user.id).single(),
+    supabase.from('goals').select('saved_amount, title, target_amount').eq('id', goal_id).eq('user_id', user.id).single(),
   ])
 
   if (!acc)  return { error: 'Account not found' }
   if (!goal) return { error: 'Goal not found' }
   if (Number(acc.balance) < amount) return { error: `Insufficient balance in ${acc.name}` }
 
-  // Deduct from account
-  await supabase.from('accounts')
-    .update({ balance: Number(acc.balance) - amount })
-    .eq('id', account_id)
+  await supabase.from('accounts').update({ balance: Number(acc.balance) - amount }).eq('id', account_id)
 
-  // Add to goal
-  await supabase.from('goals')
-    .update({ saved_amount: Number(goal.saved_amount) + amount })
-    .eq('id', goal_id).eq('user_id', user.id)
+  const newSaved = Number(goal.saved_amount) + amount
+  const update: Record<string, unknown> = { saved_amount: newSaved }
+  if (newSaved >= Number(goal.target_amount)) update.status = 'completed'
+
+  await supabase.from('goals').update(update).eq('id', goal_id).eq('user_id', user.id)
+
+  revalidatePath('/dashboard/goals')
+  revalidatePath('/dashboard')
+  return {}
+}
+
+export async function deleteGoal(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase.from('goals').delete().eq('id', id).eq('user_id', user.id)
+  if (error) return { error: error.message }
 
   revalidatePath('/dashboard/goals')
   revalidatePath('/dashboard')
