@@ -8,6 +8,7 @@ function currentMonth() {
 }
 
 // category_id empty => sets/updates the manual MONTHLY TOTAL override (category_id NULL row)
+// Uses select-then-update/insert with maybeSingle (never throws on 0 or duplicate rows)
 export async function addBudget(formData: FormData): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -21,7 +22,7 @@ export async function addBudget(formData: FormData): Promise<{ error?: string }>
 
   let query = supabase.from('budgets').select('id').eq('user_id', user.id).eq('month', month)
   query = category_id ? query.eq('category_id', category_id) : query.is('category_id', null)
-  const { data: existing } = await query.single()
+  const { data: existing } = await query.maybeSingle()
 
   if (existing) {
     const { error } = await supabase.from('budgets').update({ limit_amount }).eq('id', existing.id)
