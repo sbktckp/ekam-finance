@@ -41,7 +41,7 @@ export default async function ReportsPage() {
   const currentTxns = allTxns?.filter(t => t.date >= thisMonth.start && t.date < thisMonth.end) ?? []
   const expenseTxns = currentTxns.filter(t => t.type === 'expense')
 
-  // Category breakdown — this month
+  // Category breakdown
   const catMap = new Map<string, number>()
   expenseTxns.forEach(t => {
     const key = t.category_id ?? '__none__'
@@ -62,18 +62,27 @@ export default async function ReportsPage() {
   })
   const topMerchants = Array.from(merchMap.entries()).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 5)
 
-  // Spending by day of week
+  // Day of week
   const dowLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const dowMap = new Array(7).fill(0)
   expenseTxns.forEach(t => { dowMap[new Date(t.date).getDay()] += Number(t.amount_in_base) })
   const byDayOfWeek = dowLabels.map((label, i) => ({ label, amount: dowMap[i] }))
 
-  // Biggest single expense this month
+  // ── Daily spend for current month (calendar heatmap) ──────────────────────
+  const daysInMonth     = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getDay() // 0=Sun
+  const dailySpend      = new Array(daysInMonth + 1).fill(0) // index = day number
+  expenseTxns.forEach(t => {
+    const d = new Date(t.date).getDate()
+    dailySpend[d] += Number(t.amount_in_base)
+  })
+  const monthYear = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+
   const biggest = expenseTxns.reduce((max, t) => Number(t.amount_in_base) > Number(max?.amount_in_base ?? 0) ? t : max, expenseTxns[0])
 
-  const savingsRate = thisMonth.income > 0 ? ((thisMonth.income - thisMonth.expense) / thisMonth.income) * 100 : 0
-  const avgDailySpend = thisMonth.expense / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const avgTxnSize = expenseTxns.length > 0 ? thisMonth.expense / expenseTxns.length : 0
+  const savingsRate    = thisMonth.income > 0 ? ((thisMonth.income - thisMonth.expense) / thisMonth.income) * 100 : 0
+  const avgDailySpend  = thisMonth.expense / daysInMonth
+  const avgTxnSize     = expenseTxns.length > 0 ? thisMonth.expense / expenseTxns.length : 0
 
   return (
     <ReportsView
@@ -86,6 +95,10 @@ export default async function ReportsPage() {
       totalExpenses={thisMonth.expense}
       topMerchants={topMerchants}
       byDayOfWeek={byDayOfWeek}
+      dailySpend={dailySpend}
+      daysInMonth={daysInMonth}
+      firstDayOfMonth={firstDayOfMonth}
+      monthYear={monthYear}
       savingsRate={savingsRate}
       avgDailySpend={avgDailySpend}
       avgTxnSize={avgTxnSize}
