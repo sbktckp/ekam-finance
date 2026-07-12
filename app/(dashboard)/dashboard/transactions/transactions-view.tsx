@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Pencil, Trash2, X, AlertTriangle, SlidersHorizontal } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, AlertTriangle, SlidersHorizontal, StickyNote } from 'lucide-react'
 import { deleteTransaction, updateTransaction } from '@/app/actions/transactions'
 import { AddTransactionModal } from '@/components/modals/add-transaction-modal'
 import { AddAccountModal }     from '@/components/modals/add-account-modal'
@@ -297,38 +297,41 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                   const cat = txn.category_id ? categories.find(c => c.id === txn.category_id) : null
                   return (
                     <tr key={txn.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
-                      <td className="px-6 py-4 text-sm text-gray-400 font-medium whitespace-nowrap">
+                      <td className="px-6 py-4 text-sm text-gray-400 font-medium whitespace-nowrap align-top">
                         {new Date(txn.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0"
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5"
                             style={{ background: txn.type === 'income' ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.12)', color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
                             {txn.type === 'income' ? '+' : '−'}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">
+                            <p className="text-sm font-semibold truncate max-w-[200px]" style={{ color: 'rgba(255,255,255,0.92)' }}>
                               {txn.merchant ?? txn.note ?? 'Transaction'}
                             </p>
                             {txn.merchant && txn.note && (
-                              <p className="text-[11px] text-gray-400 truncate max-w-[160px]">{txn.note}</p>
+                              <p className="flex items-center gap-1 mt-1 truncate max-w-[220px]" style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px', fontWeight: 500 }}>
+                                <StickyNote className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.40)' }} />
+                                {txn.note}
+                              </p>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 hidden sm:table-cell">
+                      <td className="px-6 py-4 hidden sm:table-cell align-top">
                         {cat ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
                             {cat.icon} {cat.name}
                           </span>
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right align-top">
                         <span className="text-sm font-black" style={{ color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
                           {txn.type === 'income' ? '+' : '−'}{formatCurrency(Number(txn.amount_in_base), txn.currency)}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 align-top">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           {txn.type === 'income' && (
                             <button onClick={() => setEditTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-50 transition-colors" title="Edit">
