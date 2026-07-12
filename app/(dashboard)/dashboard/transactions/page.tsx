@@ -19,9 +19,11 @@ export default async function TransactionsPage() {
   ] = await Promise.all([
     // Stable order: date desc, then created_at desc, then id desc as final tiebreaker
     // — prevents same-date transactions from silently reshuffling after an edit
+    // Transfers are excluded — they live in the Accounts page's Transfer History instead
     supabase.from('transactions')
       .select('id, date, merchant, note, type, amount, amount_in_base, currency, category_id, account_id')
       .eq('user_id', user.id)
+      .neq('type', 'transfer')
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
       .order('id', { ascending: false })
