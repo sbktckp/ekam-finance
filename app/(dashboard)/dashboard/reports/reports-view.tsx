@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown, Minus, X } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 
 type Month = { label: string; start: string; end: string; income: number; expense: number; net: number; count: number }
 type Cat   = { catId: string; icon: string; name: string; amount: number }
