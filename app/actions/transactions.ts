@@ -22,8 +22,9 @@ export async function addTransaction(formData: FormData): Promise<{ error?: stri
   if (!amount || amount <= 0)    return { error: 'Enter a valid amount' }
   if (!account_id)               return { error: 'Select an account' }
   if (!category_id)              return { error: 'Please select a category' }
-  if (!merchant && !note)        return { error: 'Please add a merchant name or note' }
-  if (merchant && merchant.length > 100) return { error: 'Note must be 100 characters or less' }
+  if (!merchant)                 return { error: 'Please add a merchant name' }
+  if (merchant.length > 100)     return { error: 'Merchant must be 100 characters or less' }
+  if (note && note.length > 100) return { error: 'Note must be 100 characters or less' }
   if (!date)                     return { error: 'Select a date' }
   if (!['income', 'expense', 'transfer'].includes(type)) return { error: 'Invalid type' }
 
@@ -98,8 +99,10 @@ export async function updateTransaction(id: string, formData: FormData): Promise
   const date        = formData.get('date')         as string
   const category_id = (formData.get('category_id') as string) || null
 
-  if (!newAmount || newAmount <= 0) return { error: 'Enter a valid amount' }
-  if (merchant && merchant.length > 100) return { error: 'Note must be 100 characters or less' }
+  if (!newAmount || newAmount <= 0)  return { error: 'Enter a valid amount' }
+  if (!merchant)                     return { error: 'Please add a merchant name' }
+  if (merchant.length > 100)         return { error: 'Merchant must be 100 characters or less' }
+  if (note && note.length > 100)     return { error: 'Note must be 100 characters or less' }
 
   const { data: old } = await supabase.from('transactions')
     .select('amount_in_base, account_id, type')
