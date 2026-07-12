@@ -25,6 +25,7 @@ function EditModal({ txn, categories, open, onClose, onSuccess }: {
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [selCat, setSelCat] = useState(txn.category_id ?? '')
+
   const incomeCats = categories.filter(c => c.type === 'income' || c.type === 'both')
 
   function handleSubmit(fd: FormData) {
@@ -55,7 +56,13 @@ function EditModal({ txn, categories, open, onClose, onSuccess }: {
           </div>
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Source</label>
-            <input name="merchant" type="text" defaultValue={txn.merchant ?? ''} placeholder="e.g. Salary..."
+            <input name="merchant" type="text" maxLength={100} required defaultValue={txn.merchant ?? ''} placeholder="e.g. Salary..."
+              className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all"
+              style={{ background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }} />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Note <span style={{ color: 'rgba(255,255,255,0.25)' }}>(optional)</span></label>
+            <input name="note" type="text" maxLength={100} defaultValue={txn.note ?? ''} placeholder="e.g. Q3 bonus"
               className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all"
               style={{ background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }} />
           </div>
@@ -299,9 +306,14 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                             style={{ background: txn.type === 'income' ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.12)', color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
                             {txn.type === 'income' ? '+' : '−'}
                           </div>
-                          <p className="text-sm font-semibold text-gray-900 truncate max-w-[140px]">
-                            {txn.merchant ?? txn.note ?? 'Transaction'}
-                          </p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate max-w-[160px]">
+                              {txn.merchant ?? txn.note ?? 'Transaction'}
+                            </p>
+                            {txn.merchant && txn.note && (
+                              <p className="text-[11px] text-gray-400 truncate max-w-[160px]">{txn.note}</p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 hidden sm:table-cell">
