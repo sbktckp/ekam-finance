@@ -13,6 +13,7 @@ interface Props {
   incomeDelta: number; expenseDelta: number; netDelta: number
   catBreakdown: Cat[]; totalExpenses: number
   topMerchants: Merch[]; byDayOfWeek: Dow[]
+  dailySpend: number[]; daysInMonth: number; firstDayOfMonth: number; monthYear: string
   savingsRate: number; avgDailySpend: number; avgTxnSize: number
   biggestExpense: { merchant: string; amount: number } | null
   txnCount: number
@@ -40,7 +41,7 @@ function useInView() {
   const ref = useRef<HTMLDivElement>(null)
   const [inView, setInView] = useState(false)
   useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInView(true); obs.disconnect() } }, { threshold: 0.2 })
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInView(true); obs.disconnect() } }, { threshold: 0.15 })
     if (ref.current) obs.observe(ref.current)
     return () => obs.disconnect()
   }, [])
@@ -74,9 +75,113 @@ function KPICard({ label, value, color, delta, invert, idx }: { label: string; v
   )
 }
 
+// ── Day-wise calendar heatmap ─────────────────────────────────────────────────
+function DailyCalendar({ dailySpend, daysInMonth, firstDayOfMonth, monthYear }: {
+  dailySpend: number[]; daysInMonth: number; firstDayOfMonth: number; monthYear: string
+}) {
+  const { ref, inView } = useInView()
+  const [hoverDay, setHoverDay] = useState<number | null>(null)
+
+  const maxSpend = Math.max(...dailySpend.slice(1, daysInMonth + 1), 0.01)
+  const today    = new Date().getDate()
+
+  // Build 7-column grid cells: leading empty cells + day cells
+  const cells: { day: number | null; amount: number }[] = []
+  for (let i = 0; i < firstDayOfMonth; i++) cells.push({ day: null, amount: 0 })
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, amount: dailySpend[d] ?? 0 })
+
+  // Pad to complete last row
+  while (cells.length % 7 !== 0) cells.push({ day: null, amount: 0 })
+
+  function cellColor(amount: number, isToday: boolean): string {
+    if (amount <= 0) return isToday ? 'rgba(52,211,153,0.10)' : 'rgba(255,255,255,0.03)'
+    const intensity = Math.pow(amount / maxSpend, 0.6) // soften with power curve
+    const r = Math.round(244 * intensity + 59 * (1 - intensity))
+    const g = Math.round(63  * intensity + 130 * (1 - intensity))
+    const b = Math.round(94  * intensity + 246 * (1 - intensity))
+    return `rgba(${r},${g},${b},${0.18 + intensity * 0.72})`
+  }
+
+  const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+  return (
+    <div className="surface-light rounded-2xl p-6 animate-fade-up" style={{ animationDelay: '0.35s', animationFillMode: 'backwards' }} ref={ref}>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-bold text-gray-900">Daily Spending — {monthYear}</h2>
+        {hoverDay && dailySpend[hoverDay] > 0 && (
+          <div className="text-right">
+            <p className="text-[10px] text-gray-400">Day {hoverDay}</p>
+            <p className="text-xs font-bold text-red-500">{formatCurrency(dailySpend[hoverDay], 'INR')}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Day-of-week header */}
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {DOW.map(d => (
+          <div key={d} className="text-center text-[10px] font-bold text-gray-400 py-0.5">{d}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, idx) => {
+          if (cell.day === null) {
+            return <div key={`empty-${idx}`} className="aspect-square rounded-lg" />
+          }
+          const isToday = cell.day === today
+          const isFuture = cell.day > today
+          const bg = inView ? cellColor(cell.amount, isToday) : 'rgba(255,255,255,0.03)'
+          const isHover = hoverDay === cell.day
+
+          return (
+            <div
+              key={cell.day}
+              className="aspect-square rounded-lg flex flex-col items-center justify-center relative cursor-default transition-all duration-500"
+              style={{
+                background: bg,
+                border: isToday ? '1px solid rgba(52,211,153,0.5)' : isHover ? '1px solid rgba(244,63,94,0.4)' : '1px solid transparent',
+                opacity: isFuture ? 0.35 : 1,
+                transitionDelay: inView ? `${idx * 8}ms` : '0ms',
+                transform: isHover ? 'scale(1.12)' : 'scale(1)',
+              }}
+              onMouseEnter={() => setHoverDay(cell.day)}
+              onMouseLeave={() => setHoverDay(null)}
+            >
+              <span className="text-[10px] font-bold" style={{ color: cell.amount > 0 ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.35)' }}>
+                {cell.day}
+              </span>
+              {cell.amount > 0 && (
+                <span className="text-[8px] font-semibold leading-none mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                  {cell.amount >= 1000 ? `${(cell.amount / 1000).toFixed(0)}k` : Math.round(cell.amount)}
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center justify-between mt-3">
+        <div className="flex items-center gap-2">
+          <div className="w-3 h-3 rounded-sm" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)' }} />
+          <span className="text-[10px] text-gray-400">No spend</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {[0.15, 0.35, 0.55, 0.75, 1.0].map((v, i) => (
+            <div key={i} className="w-4 h-3 rounded-sm" style={{ background: cellColor(v * maxSpend, false) }} />
+          ))}
+          <span className="text-[10px] text-gray-400 ml-1">High</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function ReportsView({
   monthly, thisMonth, incomeDelta, expenseDelta, netDelta, catBreakdown, totalExpenses,
-  topMerchants, byDayOfWeek, savingsRate, avgDailySpend, avgTxnSize, biggestExpense, txnCount,
+  topMerchants, byDayOfWeek, dailySpend, daysInMonth, firstDayOfMonth, monthYear,
+  savingsRate, avgDailySpend, avgTxnSize, biggestExpense, txnCount,
 }: Props) {
   const [hoverMonth, setHoverMonth] = useState<Month | null>(null)
   const chartEl = useInView()
@@ -129,18 +234,10 @@ export function ReportsView({
             <div key={m.label} className="flex-1 flex flex-col items-center gap-1.5 cursor-pointer group"
               onMouseEnter={() => setHoverMonth(m)} onMouseLeave={() => setHoverMonth(null)}>
               <div className="w-full flex gap-0.5 items-end" style={{ height: '128px' }}>
-                <div className="flex-1 rounded-t-md transition-all duration-700 group-hover:opacity-100"
-                  style={{
-                    height: chartEl.inView ? `${(m.income / maxBar) * 100}%` : '0%', transitionDelay: `${i * 60}ms`,
-                    background: '#10b981', minHeight: m.income > 0 ? '4px' : '0',
-                    opacity: hoverMonth && hoverMonth.label !== m.label ? 0.35 : 1,
-                  }} />
-                <div className="flex-1 rounded-t-md transition-all duration-700 group-hover:opacity-100"
-                  style={{
-                    height: chartEl.inView ? `${(m.expense / maxBar) * 100}%` : '0%', transitionDelay: `${i * 60}ms`,
-                    background: '#f43f5e', minHeight: m.expense > 0 ? '4px' : '0',
-                    opacity: hoverMonth && hoverMonth.label !== m.label ? 0.35 : 1,
-                  }} />
+                <div className="flex-1 rounded-t-md transition-all duration-700"
+                  style={{ height: chartEl.inView ? `${(m.income / maxBar) * 100}%` : '0%', transitionDelay: `${i * 60}ms`, background: '#10b981', minHeight: m.income > 0 ? '4px' : '0', opacity: hoverMonth && hoverMonth.label !== m.label ? 0.35 : 1 }} />
+                <div className="flex-1 rounded-t-md transition-all duration-700"
+                  style={{ height: chartEl.inView ? `${(m.expense / maxBar) * 100}%` : '0%', transitionDelay: `${i * 60}ms`, background: '#f43f5e', minHeight: m.expense > 0 ? '4px' : '0', opacity: hoverMonth && hoverMonth.label !== m.label ? 0.35 : 1 }} />
               </div>
               <span className={`text-[10px] font-semibold transition-colors ${hoverMonth?.label === m.label ? 'text-gray-900' : 'text-gray-400'}`}>{m.label}</span>
             </div>
@@ -151,6 +248,14 @@ export function ReportsView({
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-400" /><span className="text-[11px] text-gray-500">Expenses</span></div>
         </div>
       </div>
+
+      {/* ── Daily calendar heatmap ─────────────────────────────────────────── */}
+      <DailyCalendar
+        dailySpend={dailySpend}
+        daysInMonth={daysInMonth}
+        firstDayOfMonth={firstDayOfMonth}
+        monthYear={monthYear}
+      />
 
       <div className="grid sm:grid-cols-2 gap-4">
         {/* Category breakdown */}
@@ -195,7 +300,7 @@ export function ReportsView({
         )}
       </div>
 
-      {/* Day-of-week pattern + biggest expense */}
+      {/* Day-of-week + biggest expense */}
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="surface-light rounded-2xl p-6 animate-fade-up delay-6">
           <h2 className="text-sm font-bold text-gray-900 mb-4">Spending by Day of Week</h2>
@@ -210,7 +315,7 @@ export function ReportsView({
         </div>
 
         <div className="surface-light rounded-2xl p-6 flex flex-col justify-center animate-fade-up" style={{ animationDelay: '0.5s', animationFillMode: 'backwards' }}>
-          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Biggest Expense — {thisMonth.label}</p>
+          <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Biggest Expense — {monthYear}</p>
           {biggestExpense ? (
             <>
               <p className="text-lg font-black text-gray-900 truncate">{biggestExpense.merchant}</p>
@@ -222,7 +327,7 @@ export function ReportsView({
         </div>
       </div>
 
-      {/* Monthly table */}
+      {/* Monthly summary table */}
       <div className="surface-light rounded-2xl overflow-hidden animate-fade-up" style={{ animationDelay: '0.6s', animationFillMode: 'backwards' }}>
         <table className="w-full">
           <thead>
