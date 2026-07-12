@@ -1,19 +1,20 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { TrendingUp, TrendingDown, Minus, X } from 'lucide-react'
+import { formatCurrency, formatDate } from '@/lib/utils'
 
 type Month = { label: string; start: string; end: string; income: number; expense: number; net: number; count: number }
 type Cat   = { catId: string; icon: string; name: string; amount: number }
 type Merch = { name: string; amount: number }
 type Dow   = { label: string; amount: number }
+type DayTxn = { day: number; id: string; merchant: string; amount: number; icon: string; categoryName: string }
 
 interface Props {
   monthly: Month[]; thisMonth: Month
   incomeDelta: number; expenseDelta: number; netDelta: number
   catBreakdown: Cat[]; totalExpenses: number
   topMerchants: Merch[]; byDayOfWeek: Dow[]
-  dailySpend: number[]; daysInMonth: number; firstDayOfMonth: number; monthYear: string
+  dailySpend: number[]; dailyTxns: DayTxn[][]; daysInMonth: number; firstDayOfMonth: number; monthYear: string
   savingsRate: number; avgDailySpend: number; avgTxnSize: number
   biggestExpense: { merchant: string; amount: number } | null
   txnCount: number
@@ -75,12 +76,13 @@ function KPICard({ label, value, color, delta, invert, idx }: { label: string; v
   )
 }
 
-// ── Day-wise calendar heatmap ─────────────────────────────────────────────────
-function DailyCalendar({ dailySpend, daysInMonth, firstDayOfMonth, monthYear }: {
-  dailySpend: number[]; daysInMonth: number; firstDayOfMonth: number; monthYear: string
+// ── Day-wise calendar heatmap with click-to-expand drawer ─────────────────────
+function DailyCalendar({ dailySpend, dailyTxns, daysInMonth, firstDayOfMonth, monthYear }: {
+  dailySpend: number[]; dailyTxns: DayTxn[][]; daysInMonth: number; firstDayOfMonth: number; monthYear: string
 }) {
   const { ref, inView } = useInView()
   const [hoverDay, setHoverDay] = useState<number | null>(null)
+  const [selectedDay, setSelectedDay] = useState<number | null>(null)
 
   const maxSpend = Math.max(...dailySpend.slice(1, daysInMonth + 1), 0.01)
   const today    = new Date().getDate()
@@ -103,14 +105,20 @@ function DailyCalendar({ dailySpend, daysInMonth, firstDayOfMonth, monthYear }: 
   }
 
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const selectedTxns = selectedDay ? (dailyTxns[selectedDay] ?? []) : []
+  const selectedTotal = selectedDay ? (dailySpend[selectedDay] ?? 0) : 0
+
+  function toggleDay(day: number) {
+    setSelectedDay(prev => (prev === day ? null : day))
+  }
 
   return (
     <div className="surface-light rounded-2xl p-6 animate-fade-up" style={{ animationDelay: '0.35s', animationFillMode: 'backwards' }} ref={ref}>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-bold text-gray-900">Daily Spending — {monthYear}</h2>
-        {hoverDay && dailySpend[hoverDay] > 0 && (
+        {hoverDay && !selectedDay && dailySpend[hoverDay] > 0 && (
           <div className="text-right">
-            <p className="text-[10px] text-gray-400">Day {hoverDay}</p>
+            <p className="text-[10px] text-gray-400">Day {hoverDay} · click for details</p>
             <p className="text-xs font-bold text-red-500">{formatCurrency(dailySpend[hoverDay], 'INR')}</p>
           </div>
         )}
@@ -131,22 +139,26 @@ function DailyCalendar({ dailySpend, daysInMonth, firstDayOfMonth, monthYear }: 
           }
           const isToday = cell.day === today
           const isFuture = cell.day > today
+          const isSelected = selectedDay === cell.day
           const bg = inView ? cellColor(cell.amount, isToday) : 'rgba(255,255,255,0.03)'
           const isHover = hoverDay === cell.day
+          const hasTxns = cell.amount > 0 && !isFuture
 
           return (
             <div
               key={cell.day}
-              className="aspect-square rounded-lg flex flex-col items-center justify-center relative cursor-default transition-all duration-500"
+              className="aspect-square rounded-lg flex flex-col items-center justify-center relative transition-all duration-500"
               style={{
                 background: bg,
-                border: isToday ? '1px solid rgba(52,211,153,0.5)' : isHover ? '1px solid rgba(244,63,94,0.4)' : '1px solid transparent',
+                border: isSelected ? '1.5px solid #f43f5e' : isToday ? '1px solid rgba(52,211,153,0.5)' : isHover ? '1px solid rgba(244,63,94,0.4)' : '1px solid transparent',
                 opacity: isFuture ? 0.35 : 1,
                 transitionDelay: inView ? `${idx * 8}ms` : '0ms',
-                transform: isHover ? 'scale(1.12)' : 'scale(1)',
+                transform: isSelected ? 'scale(1.14)' : isHover ? 'scale(1.12)' : 'scale(1)',
+                cursor: hasTxns ? 'pointer' : 'default',
               }}
               onMouseEnter={() => setHoverDay(cell.day)}
               onMouseLeave={() => setHoverDay(null)}
+              onClick={() => hasTxns && toggleDay(cell.day!)}
             >
               <span className="text-[10px] font-bold" style={{ color: cell.amount > 0 ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.35)' }}>
                 {cell.day}
@@ -174,13 +186,49 @@ function DailyCalendar({ dailySpend, daysInMonth, firstDayOfMonth, monthYear }: 
           <span className="text-[10px] text-gray-400 ml-1">High</span>
         </div>
       </div>
+
+      {/* Click-to-expand day drawer */}
+      <div
+        className="overflow-hidden transition-all duration-300 ease-out"
+        style={{ maxHeight: selectedDay ? `${80 + selectedTxns.length * 56}px` : '0px', opacity: selectedDay ? 1 : 0, marginTop: selectedDay ? '16px' : '0px' }}
+      >
+        <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-xs font-bold text-gray-900">Day {selectedDay} — {selectedTxns.length} transaction{selectedTxns.length === 1 ? '' : 's'}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Total spent {formatCurrency(selectedTotal, 'INR')}</p>
+            </div>
+            <button
+              onClick={() => setSelectedDay(null)}
+              className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors hover:bg-white/10"
+              aria-label="Close"
+            >
+              <X className="w-3.5 h-3.5 text-gray-400" />
+            </button>
+          </div>
+          <div className="space-y-2">
+            {selectedTxns.map(t => (
+              <div key={t.id} className="flex items-center justify-between py-1.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0" style={{ background: 'rgba(244,63,94,0.12)' }}>{t.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-800 truncate">{t.merchant}</p>
+                    <p className="text-[10px] text-gray-400">{t.categoryName}</p>
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-red-500 flex-shrink-0 ml-2">{formatCurrency(t.amount, 'INR')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
 export function ReportsView({
   monthly, thisMonth, incomeDelta, expenseDelta, netDelta, catBreakdown, totalExpenses,
-  topMerchants, byDayOfWeek, dailySpend, daysInMonth, firstDayOfMonth, monthYear,
+  topMerchants, byDayOfWeek, dailySpend, dailyTxns, daysInMonth, firstDayOfMonth, monthYear,
   savingsRate, avgDailySpend, avgTxnSize, biggestExpense, txnCount,
 }: Props) {
   const [hoverMonth, setHoverMonth] = useState<Month | null>(null)
@@ -252,6 +300,7 @@ export function ReportsView({
       {/* ── Daily calendar heatmap ─────────────────────────────────────────── */}
       <DailyCalendar
         dailySpend={dailySpend}
+        dailyTxns={dailyTxns}
         daysInMonth={daysInMonth}
         firstDayOfMonth={firstDayOfMonth}
         monthYear={monthYear}
