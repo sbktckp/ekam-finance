@@ -27,6 +27,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories, budge
   const [selectedCat, setSelectedCat] = useState('')
   const [accountId, setAccountId]     = useState(accounts[0]?.id ?? '')
   const [addAccOpen, setAddAccOpen]   = useState(false)
+  const [merchantLen, setMerchantLen] = useState(0)
   const [noteLen, setNoteLen]         = useState(0)
   const [amount, setAmount]           = useState('')
 
@@ -49,9 +50,8 @@ export function AddTransactionModal({ open, onClose, accounts, categories, budge
   const isNearLimit   = txnType === 'expense' && catLimit !== undefined && amountNum > 0 && !wouldExceed && projected / catLimit >= 0.8
 
   function handleSubmit(formData: FormData) {
-    if (!selectedCat) { setError('Please select a category'); return }
-    const note = (formData.get('merchant') as string)?.trim()
-    if (!note) { setError('Please add a merchant name or note'); return }
+    const merchant = (formData.get('merchant') as string)?.trim()
+    if (!merchant) { setError('Please add a merchant name'); return }
 
     formData.set('type',        txnType)
     formData.set('category_id', selectedCat)
@@ -61,7 +61,7 @@ export function AddTransactionModal({ open, onClose, accounts, categories, budge
     startTransition(async () => {
       const res = await addTransaction(formData)
       if (res.error) { setError(res.error); return }
-      setSelectedCat(''); setNoteLen(0); setAmount(''); onClose(); router.refresh()
+      setSelectedCat(''); setMerchantLen(0); setNoteLen(0); setAmount(''); onClose(); router.refresh()
     })
   }
 
@@ -214,19 +214,35 @@ export function AddTransactionModal({ open, onClose, accounts, categories, budge
                   </div>
                 )}
 
-                {/* Note */}
+                {/* Merchant */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                      {isExpense ? 'Merchant / Note' : 'Source / Note'}
+                      {isExpense ? 'Merchant' : 'Source'}
                       <span className="text-red-400 ml-0.5">*</span>
+                    </label>
+                    <span className={cn('text-[10px] font-medium', merchantLen > 90 ? 'text-red-400' : merchantLen > 70 ? 'text-amber-400' : 'text-gray-300')}>
+                      {merchantLen}/100
+                    </span>
+                  </div>
+                  <input name="merchant" type="text" maxLength={100} required
+                    placeholder={isExpense ? 'e.g. Swiggy, Landlord...' : 'e.g. Salary, Freelance client...'}
+                    onChange={e => { setMerchantLen(e.target.value.length); setError(null) }}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 transition-all" />
+                </div>
+
+                {/* Note (optional) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                      Note <span className="text-gray-300 normal-case font-medium">(optional)</span>
                     </label>
                     <span className={cn('text-[10px] font-medium', noteLen > 90 ? 'text-red-400' : noteLen > 70 ? 'text-amber-400' : 'text-gray-300')}>
                       {noteLen}/100
                     </span>
                   </div>
-                  <input name="merchant" type="text" maxLength={100}
-                    placeholder={isExpense ? 'e.g. Swiggy, Rent...' : 'e.g. Salary, Freelance...'}
+                  <input name="note" type="text" maxLength={100}
+                    placeholder={isExpense ? 'e.g. team lunch after sprint demo' : 'e.g. Q3 bonus'}
                     onChange={e => { setNoteLen(e.target.value.length); setError(null) }}
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-medium text-gray-900 placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400 transition-all" />
                 </div>
