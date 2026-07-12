@@ -21,7 +21,7 @@ export default async function ReportsPage() {
 
   const [{ data: allTxns }, { data: categories }] = await Promise.all([
     supabase.from('transactions')
-      .select('type, amount_in_base, date, category_id, merchant')
+      .select('id, type, amount_in_base, date, category_id, merchant')
       .eq('user_id', user.id).gte('date', startOfYear).order('date', { ascending: false }),
     supabase.from('categories').select('id, name, icon').order('name'),
   ])
@@ -72,10 +72,23 @@ export default async function ReportsPage() {
   const daysInMonth     = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getDay() // 0=Sun
   const dailySpend      = new Array(daysInMonth + 1).fill(0) // index = day number
+  const dailyTxns: { day: number; id: string; merchant: string; amount: number; icon: string; categoryName: string }[][] =
+    Array.from({ length: daysInMonth + 1 }, () => [])
   expenseTxns.forEach(t => {
     const d = new Date(t.date).getDate()
     dailySpend[d] += Number(t.amount_in_base)
+    const cat = categories?.find(c => c.id === t.category_id)
+    dailyTxns[d].push({
+      day: d,
+      id: t.id,
+      merchant: t.merchant?.trim() || 'Uncategorized',
+      amount: Number(t.amount_in_base),
+      icon: cat?.icon ?? '📦',
+      categoryName: cat?.name ?? 'Uncategorized',
+    })
   })
+  // Largest first within each day
+  dailyTxns.forEach(list => list.sort((a, b) => b.amount - a.amount))
   const monthYear = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 
   const biggest = expenseTxns.reduce((max, t) => Number(t.amount_in_base) > Number(max?.amount_in_base ?? 0) ? t : max, expenseTxns[0])
@@ -96,6 +109,7 @@ export default async function ReportsPage() {
       topMerchants={topMerchants}
       byDayOfWeek={byDayOfWeek}
       dailySpend={dailySpend}
+      dailyTxns={dailyTxns}
       daysInMonth={daysInMonth}
       firstDayOfMonth={firstDayOfMonth}
       monthYear={monthYear}
