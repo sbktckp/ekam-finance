@@ -78,10 +78,13 @@ export default async function DashboardPage() {
   startOfMonth.setDate(1)
   const monthStr = startOfMonth.toISOString().split('T')[0]
 
+  // Transfers are excluded — they move money between your own accounts and
+  // aren't income or expense, so they don't belong in this feed or the KPIs.
   const { data: txns } = await supabase
     .from('transactions')
     .select('*')
     .eq('user_id', user!.id)
+    .neq('type', 'transfer')
     .gte('date', monthStr)
     .order('date', { ascending: false })
 
