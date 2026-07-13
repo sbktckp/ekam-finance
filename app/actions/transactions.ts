@@ -105,18 +105,37 @@ export async function updateTransaction(id: string, formData: FormData): Promise
   if (note && note.length > 100)     return { error: 'Note must be 100 characters or less' }
 
   const { data: old } = await supabase.from('transactions')
-    .select('amount_in_base, account_id, type')
+    .select('amount_in_base, account_id, type, currency')
     .eq('id', id).eq('user_id', user.id).single()
 
-  if (!old)                  return { error: 'Transaction not found' }
-  if (old.type !== 'income') return { error: 'Only income transactions can be edited' }
+  if (!old) return { error: 'Transaction not found' }
+  if (old.type !== 'income' && old.type !== 'expense') {
+    return { error: 'Only income and expense transactions can be edited here' }
+  }
+
+  const oldAmount = Number(old.amount_in_base)
 
   if (old.account_id) {
-    const { data: acc } = await supabase.from('accounts').select('balance').eq('id', old.account_id).single()
+    const { data: acc } = await supabase.from('accounts').select('balance, name').eq('id', old.account_id).single()
     if (acc) {
-      const delta = newAmount - Number(old.amount_in_base)
+      const currentBalance = Number(acc.balance)
+
+      // For expenses, a larger amount means MORE money leaves the account —
+      // guard against pushing the balance negative.
+      if (old.type === 'expense') {
+        const increase = newAmount - oldAmount
+        if (increase > 0 && increase > currentBalance) {
+          const fmt = new Intl.NumberFormat('en-IN', { style: 'currency', currency: old.currency ?? 'INR', minimumFractionDigits: 0 }).format(currentBalance)
+          return { error: `Insufficient balance in ${acc.name}. Available: ${fmt}` }
+        }
+      }
+
+      const delta = old.type === 'income'
+        ? (newAmount - oldAmount)   // income up  → balance up
+        : (oldAmount - newAmount)   // expense up → balance down
+
       await supabase.from('accounts')
-        .update({ balance: Math.max(0, Number(acc.balance) + delta) })
+        .update({ balance: Math.max(0, currentBalance + delta) })
         .eq('id', old.account_id)
     }
   }
