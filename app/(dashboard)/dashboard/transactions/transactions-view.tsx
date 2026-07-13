@@ -18,7 +18,7 @@ type Txn      = {
 
 const DARK = { bg: '#1c1c1e', border: 'rgba(255,255,255,0.10)', input: 'rgba(255,255,255,0.07)', inputBorder: 'rgba(255,255,255,0.13)', text: 'rgba(255,255,255,0.88)', label: 'rgba(255,255,255,0.38)' }
 
-// ─── Edit modal (income only) ─────────────────────────────────────────────────
+// ─── Edit modal (income + expense) ─────────────────────────────────────────────
 function EditModal({ txn, categories, open, onClose, onSuccess }: {
   txn: Txn; categories: Category[]; open: boolean; onClose: () => void; onSuccess: () => void
 }) {
@@ -26,7 +26,8 @@ function EditModal({ txn, categories, open, onClose, onSuccess }: {
   const [error, setError] = useState<string | null>(null)
   const [selCat, setSelCat] = useState(txn.category_id ?? '')
 
-  const incomeCats = categories.filter(c => c.type === 'income' || c.type === 'both')
+  const isIncome = txn.type === 'income'
+  const relevantCats = categories.filter(c => c.type === txn.type || c.type === 'both')
 
   function handleSubmit(fd: FormData) {
     fd.set('category_id', selCat)
@@ -44,7 +45,7 @@ function EditModal({ txn, categories, open, onClose, onSuccess }: {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl" style={{ background: DARK.bg, border: `1px solid ${DARK.border}` }}>
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${DARK.border}` }}>
-          <h2 className="text-sm font-bold" style={{ color: DARK.text }}>Edit Income</h2>
+          <h2 className="text-sm font-bold" style={{ color: DARK.text }}>Edit {isIncome ? 'Income' : 'Expense'}</h2>
           <button onClick={onClose} className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/10"><X className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.5)' }} /></button>
         </div>
         <form action={handleSubmit} className="p-6 space-y-4">
@@ -55,22 +56,22 @@ function EditModal({ txn, categories, open, onClose, onSuccess }: {
               style={{ background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }} />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Source</label>
-            <input name="merchant" type="text" maxLength={100} required defaultValue={txn.merchant ?? ''} placeholder="e.g. Salary..."
+            <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>{isIncome ? 'Source' : 'Merchant'}</label>
+            <input name="merchant" type="text" maxLength={100} required defaultValue={txn.merchant ?? ''} placeholder={isIncome ? 'e.g. Salary...' : 'e.g. Swiggy, Landlord...'}
               className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all"
               style={{ background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }} />
           </div>
           <div className="space-y-1.5">
             <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Note <span style={{ color: 'rgba(255,255,255,0.25)' }}>(optional)</span></label>
-            <input name="note" type="text" maxLength={100} defaultValue={txn.note ?? ''} placeholder="e.g. Q3 bonus"
+            <input name="note" type="text" maxLength={100} defaultValue={txn.note ?? ''} placeholder={isIncome ? 'e.g. Q3 bonus' : 'e.g. team lunch after sprint demo'}
               className="w-full px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-400/25 transition-all"
               style={{ background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }} />
           </div>
-          {incomeCats.length > 0 && (
+          {relevantCats.length > 0 && (
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold uppercase tracking-widest" style={{ color: DARK.label }}>Category</label>
-              <div className="grid grid-cols-4 gap-2">
-                {incomeCats.slice(0, 8).map(cat => (
+              <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-0.5">
+                {relevantCats.map(cat => (
                   <button key={cat.id} type="button" onClick={() => setSelCat(cat.id === selCat ? '' : cat.id)}
                     className="flex flex-col items-center gap-1 p-2 rounded-xl text-center transition-all"
                     style={{ border: selCat === cat.id ? '1px solid #34d399' : `1px solid ${DARK.inputBorder}`, background: selCat === cat.id ? 'rgba(52,211,153,0.10)' : DARK.input }}>
@@ -88,7 +89,8 @@ function EditModal({ txn, categories, open, onClose, onSuccess }: {
               style={{ background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }} />
           </div>
           {error && <p className="text-xs text-red-400 bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">{error}</p>}
-          <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-sm font-bold text-black disabled:opacity-50" style={{ background: '#10b981' }}>
+          <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50"
+            style={{ background: isIncome ? '#10b981' : '#f43f5e', color: isIncome ? '#000' : '#fff' }}>
             {isPending ? 'Saving...' : 'Save Changes'}
           </button>
         </form>
@@ -333,11 +335,9 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                       </td>
                       <td className="px-4 py-4 align-top">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {txn.type === 'income' && (
-                            <button onClick={() => setEditTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-50 transition-colors" title="Edit">
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <button onClick={() => setEditTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-50 transition-colors" title="Edit">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                           <button onClick={() => setDelTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete">
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
