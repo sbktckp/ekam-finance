@@ -290,6 +290,7 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                   <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
                   <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Description</th>
                   <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">Category</th>
+                  <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden md:table-cell">Account</th>
                   <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Amount</th>
                   <th className="px-4 py-3.5 w-20"></th>
                 </tr>
@@ -297,6 +298,7 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
               <tbody>
                 {filtered.map(txn => {
                   const cat = txn.category_id ? categories.find(c => c.id === txn.category_id) : null
+                  const acc = txn.account_id ? accounts.find(a => a.id === txn.account_id) : null
                   return (
                     <tr key={txn.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
                       <td className="px-6 py-4 text-sm text-gray-400 font-medium whitespace-nowrap align-top">
@@ -318,6 +320,13 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                                 {txn.note}
                               </p>
                             )}
+                            {/* Mobile/tablet fallback: show account inline when the dedicated column is hidden */}
+                            {acc && (
+                              <p className="flex items-center gap-1.5 mt-1 md:hidden" style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.45)' }}>
+                                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: acc.color }} />
+                                {acc.name}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -325,6 +334,14 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                         {cat ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
                             {cat.icon} {cat.name}
+                          </span>
+                        ) : <span className="text-xs text-gray-300">—</span>}
+                      </td>
+                      <td className="px-6 py-4 hidden md:table-cell align-top">
+                        {acc ? (
+                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: acc.color }} />
+                            {acc.name}
                           </span>
                         ) : <span className="text-xs text-gray-300">—</span>}
                       </td>
