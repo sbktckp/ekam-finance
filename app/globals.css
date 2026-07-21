@@ -125,3 +125,13 @@
 .dk [style*="width"] { transition: width 0.7s cubic-bezier(0.16,1,0.3,1); }
 
 .animate-spin-slow { animation: spinSlow 1.2s linear infinite; }
+
+/* ── Landing page: tilt card sheen + marquee pause ───────────────────────── */
+.tilt-card { position: relative; transform-style: preserve-3d; }
+.tilt-card::after {
+  content: '';
+  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,var(--sheen, 0)), transparent 70%);
+  transition: opacity 0.3s;
+}
+.marquee-wrap:hover .animate-marquee { animation-play-state: paused; }
