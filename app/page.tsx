@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -14,28 +14,21 @@ import { Logo } from '@/components/shared/logo'
 import { cn } from '@/lib/utils'
 
 // ScrollTrigger must be registered before ANY component's effect creates a
-// ScrollTrigger instance. Registering here at module scope (client-only)
-// guarantees that, regardless of effect ordering between components.
+// ScrollTrigger instance — doing it at module scope (client-only) guarantees
+// that regardless of effect ordering between components.
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger)
 }
+
+// useEffect runs after paint; useLayoutEffect runs before the browser paints,
+// which matters for setting hidden-by-default animation states so nothing
+// ever flashes visible for a frame. Falls back to useEffect during SSR.
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function reducedMotion() {
   if (typeof window === 'undefined') return true
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
-function scrambleTo(el: HTMLElement, final: string, duration = 850) {
-  const digits = '0123456789'
-  const start = performance.now()
-  function frame(now: number) {
-    const p = (now - start) / duration
-    if (p >= 1) { el.textContent = final; return }
-    el.textContent = final.split('').map(ch => (/\d/.test(ch) ? digits[Math.floor(Math.random() * 10)] : ch)).join('')
-    requestAnimationFrame(frame)
-  }
-  requestAnimationFrame(frame)
 }
 
 function useScrolled(threshold = 20) {
@@ -123,11 +116,15 @@ function Reveal({ children, className, style, delay = 0, y = 28 }: {
   children: React.ReactNode; className?: string; style?: React.CSSProperties; delay?: number; y?: number
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     const el = ref.current
     if (!el) return
     if (reducedMotion()) { gsap.set(el, { opacity: 1, y: 0 }); return }
     gsap.set(el, { opacity: 0, y })
+  }, [y])
+  useEffect(() => {
+    const el = ref.current
+    if (!el || reducedMotion()) return
     const st = ScrollTrigger.create({
       trigger: el,
       start: 'top 85%',
@@ -135,7 +132,7 @@ function Reveal({ children, className, style, delay = 0, y = 28 }: {
       onEnter: () => gsap.to(el, { opacity: 1, y: 0, duration: 0.8, delay, ease: 'power3.out' }),
     })
     return () => st.kill()
-  }, [delay, y])
+  }, [delay])
   return <div ref={ref} className={className} style={style}>{children}</div>
 }
 
@@ -169,7 +166,7 @@ function TiltCard({ children, className, style }: {
   return <div ref={ref} className={cn('tilt-card', className)} style={style}>{children}</div>
 }
 
-function AmbientRupees() {
+function AmbientRupees({ count = 9 }: { count?: number }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (reducedMotion() || !ref.current) return
@@ -189,41 +186,89 @@ function AmbientRupees() {
   }, [])
   return (
     <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {Array.from({ length: 9 }).map((_, i) => (
+      {Array.from({ length: count }).map((_, i) => (
         <span key={i} className="particle absolute font-bold select-none"
-          style={{ left: `${6 + i * 10.5}%`, bottom: 0, fontSize: `${12 + (i % 3) * 6}px`, color: '#34d399' }}>₹</span>
+          style={{ left: `${6 + i * (90 / count)}%`, bottom: 0, fontSize: `${12 + (i % 3) * 6}px`, color: '#34d399' }}>₹</span>
       ))}
     </div>
   )
 }
 
+// ─── Boot / loading screen ───────────────────────────────────────────────────
+const BOOT_STATUS = [
+  'Reconciling your ledger…',
+  'Locking ₹ exchange rates…',
+  'Encrypting your vault…',
+  'Preparing your dashboard…',
+]
+
 function BootOverlay({ onDone }: { onDone: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(true)
+  const [pct, setPct] = useState(0)
+
   useEffect(() => {
-    if (reducedMotion()) { onDone(); return }
+    if (reducedMotion()) { onDone(); setVisible(false); return }
     document.body.style.overflow = 'hidden'
+    const counter = { v: 0 }
+
     const ctx = gsap.context(() => {
-      gsap.timeline({
-        onComplete: () => {
+      const lines = gsap.utils.toArray<HTMLElement>('.boot-status-line')
+      const tl = gsap.timeline()
+
+      tl.to('.boot-logo', { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' })
+        .addLabel('progress')
+
+      lines.forEach((el, i) => {
+        tl.to(el, { opacity: 1, duration: 0.16 }, `progress+=${i * 0.275}`)
+          .to(el, { opacity: 0, duration: 0.16 }, `progress+=${i * 0.275 + 0.2}`)
+      })
+
+      tl.to(counter, {
+        v: 100, duration: 1.1, ease: 'power2.inOut',
+        onUpdate: () => setPct(Math.round(counter.v)),
+      }, 'progress')
+        .to('.boot-bar-fill', { scaleX: 1, duration: 1.1, ease: 'power2.inOut' }, 'progress')
+        .addLabel('done', 'progress+=1.2')
+        .add(() => {
           document.body.style.overflow = ''
           onDone()
-        },
-      })
-        .to('.boot-ln', { opacity: 1, duration: 0.05, stagger: 0.26 })
-        .to('.boot-cursor', { opacity: 0, duration: 0.01 }, '+=0.25')
-        .to(ref.current, { opacity: 0, duration: 0.5, ease: 'power2.inOut' }, '+=0.15')
+        }, 'done')
+        .to(ref.current, { opacity: 0, scale: 1.04, filter: 'blur(6px)', duration: 0.55, ease: 'power2.inOut' }, 'done')
+        .add(() => setVisible(false))
     }, ref)
+
     return () => ctx.revert()
   }, [onDone])
 
+  if (!visible) return null
+
   return (
-    <div ref={ref} className="fixed inset-0 z-[100] flex flex-col items-start justify-center px-8 sm:px-16" style={{ background: '#040404' }}>
-      <div className="font-mono text-[11px] sm:text-xs tracking-widest uppercase space-y-2.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
-        <p className="boot-ln opacity-0">&gt; EKAM FINANCE <span style={{ color: '#34d399' }}>v2.0</span></p>
-        <p className="boot-ln opacity-0">&gt; INITIALIZING LEDGER... <span style={{ color: '#34d399' }}>OK</span></p>
-        <p className="boot-ln opacity-0">&gt; SYNCING ₹ RATES... <span style={{ color: '#34d399' }}>OK</span></p>
-        <p className="boot-ln opacity-0">&gt; ENCRYPTING VAULT... <span style={{ color: '#34d399' }}>OK</span></p>
-        <p className="boot-ln opacity-0">&gt; READY<span className="boot-cursor inline-block w-2 h-3.5 ml-1 align-middle" style={{ background: '#34d399' }} /></p>
+    <div ref={ref} className="fixed inset-0 z-[100] flex flex-col items-center justify-center px-6 grid-bg" style={{ background: '#040404' }}>
+      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 60% 45% at 50% 45%, rgba(16,185,129,0.10) 0%, transparent 70%)' }} />
+      <AmbientRupees count={7} />
+      <div className="relative z-10 flex flex-col items-center">
+        <div className="boot-logo flex items-center gap-2.5 mb-9 opacity-0" style={{ transform: 'translateY(10px)' }}>
+          <div className="relative">
+            <div className="absolute inset-0 scale-[2.2] rounded-full animate-breathe" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)' }} />
+            <Logo size={34} />
+          </div>
+          <span className="text-base font-semibold tracking-wide text-white">Ekam Finance</span>
+        </div>
+
+        <div className="relative h-4 w-64 sm:w-80 text-center mb-5">
+          {BOOT_STATUS.map((t, i) => (
+            <p key={i} className="boot-status-line absolute inset-0 opacity-0 text-[11px] tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.45)' }}>{t}</p>
+          ))}
+        </div>
+
+        <div className="w-64 sm:w-80 h-[3px] rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
+          <div className="boot-bar-fill h-full rounded-full" style={{ background: 'linear-gradient(90deg,#10b981,#34d399)', transform: 'scaleX(0)', transformOrigin: 'left' }} />
+        </div>
+        <div className="flex items-center justify-between w-64 sm:w-80 mt-2">
+          <span className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.28)' }}>Loading</span>
+          <span className="text-[10px] font-bold tabular-nums" style={{ color: '#34d399' }}>{pct}%</span>
+        </div>
       </div>
     </div>
   )
@@ -264,7 +309,7 @@ function MockCard({ amountRef }: { amountRef: React.RefObject<HTMLParagraphEleme
         <div className="p-4 space-y-3">
           <div>
             <p className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>Good evening, Smit</p>
-            <p ref={amountRef} className="text-[22px] font-black text-white tracking-tight tabular-nums">₹2,40,000</p>
+            <p ref={amountRef} className="text-[22px] font-black text-white tracking-tight tabular-nums">₹0</p>
             <p className="text-[10px]" style={{ color: '#34d399' }}>Net worth</p>
           </div>
           <div className="grid grid-cols-3 gap-1.5">
@@ -314,52 +359,38 @@ export default function LandingPage() {
     if (reducedMotion()) setBooted(true)
   }, [])
 
-  useEffect(() => {
-    if (!booted) return
+  // ── Set every animated element's HIDDEN starting state before first paint.
+  // This runs unconditionally (not gated by `booted`) so nothing is ever
+  // visible-then-hidden-then-revealed — it's hidden from frame one, safely
+  // tucked behind the opaque boot overlay, and only the boot-gated effect
+  // below ever animates it back to visible.
+  useIsomorphicLayoutEffect(() => {
     const reduced = reducedMotion()
+    if (!reduced) {
+      gsap.set('.hw', { opacity: 0, yPercent: 120, rotateX: -70 })
+      gsap.set('.sub-w', { opacity: 0, y: 14 })
+      gsap.set('.hero-badge', { opacity: 0, y: -10 })
+      gsap.set('.hero-cta', { opacity: 0, y: 16 })
+      gsap.set('.tool-card', { opacity: 0, y: 46, rotateX: -18, transformOrigin: '50% 100%' })
+      if (mockWrapRef.current) gsap.set(mockWrapRef.current, { opacity: 0, scale: 0.86, y: 40 })
+    } else {
+      gsap.set('.hw, .sub-w, .hero-badge, .hero-cta, .tool-card', { opacity: 1, y: 0, rotateX: 0, yPercent: 0 })
+      if (mockWrapRef.current) gsap.set(mockWrapRef.current, { opacity: 1, scale: 1, y: 0 })
+    }
+  }, [])
 
+  // ── Scroll-driven reveals that don't depend on the boot sequence at all:
+  // tool card batch reveal + the growth chart scrub. These can safely be
+  // wired up immediately since they only fire once actually scrolled to.
+  useEffect(() => {
+    const reduced = reducedMotion()
     const ctx = gsap.context(() => {
-      // ── Hero entrance ──────────────────────────────────────────────────
-      if (!reduced) {
-        gsap.set('.hw', { opacity: 0, yPercent: 120, rotateX: -70 })
-        gsap.set('.sub-w', { opacity: 0, y: 14 })
-        gsap.set('.hero-badge', { opacity: 0, y: -10 })
-        gsap.set('.hero-cta', { opacity: 0, y: 16 })
-        if (mockWrapRef.current) gsap.set(mockWrapRef.current, { opacity: 0, scale: 0.86, y: 40 })
-
-        const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-        tl.to('.hero-badge', { opacity: 1, y: 0, duration: 0.5 })
-          .to('.hw', { opacity: 1, yPercent: 0, rotateX: 0, duration: 0.85, stagger: 0.045, ease: 'back.out(1.6)' }, '-=0.25')
-          .to('.sub-w', { opacity: 1, y: 0, duration: 0.45, stagger: 0.012 }, '-=0.5')
-          .to('.hero-cta', { opacity: 1, y: 0, duration: 0.5 }, '-=0.25')
-        if (mockWrapRef.current) {
-          tl.to(mockWrapRef.current, { opacity: 1, scale: 1, y: 0, duration: 1.1, ease: 'elastic.out(1,0.75)' }, '-=0.55')
-        }
-        tl.add(() => { if (amountRef.current) scrambleTo(amountRef.current, '₹2,40,000', 900) }, '-=0.5')
-      } else {
-        gsap.set('.hw, .sub-w, .hero-badge, .hero-cta', { opacity: 1, y: 0, rotateX: 0, yPercent: 0 })
-        if (mockWrapRef.current) gsap.set(mockWrapRef.current, { opacity: 1, scale: 1, y: 0 })
-      }
-
-      // ── Marquee glitch pulse ───────────────────────────────────────────
-      if (!reduced) {
-        gsap.timeline({ repeat: -1, repeatDelay: 5 })
-          .to('.ticker-track', { filter: 'hue-rotate(50deg) saturate(2)', x: '+=6', duration: 0.08 })
-          .to('.ticker-track', { filter: 'hue-rotate(0deg) saturate(1)', x: '-=6', duration: 0.25 })
-      }
-
-      // ── Tools grid batch reveal ─────────────────────────────────────────
-      gsap.set('.tool-card', reduced ? { opacity: 1 } : { opacity: 0, y: 46, rotateX: -18, transformOrigin: '50% 100%' })
       if (!reduced) {
         ScrollTrigger.batch('.tool-card', {
           start: 'top 88%',
           once: true,
           onEnter: batch => gsap.to(batch, { opacity: 1, y: 0, rotateX: 0, duration: 0.8, stagger: 0.08, ease: 'back.out(1.4)' }),
         })
-      }
-
-      // ── Growth bars scrub ────────────────────────────────────────────────
-      if (!reduced) {
         gsap.set('.growth-bar', { scaleY: 0 })
         gsap.to('.growth-bar', {
           scaleY: 1,
@@ -372,8 +403,45 @@ export default function LandingPage() {
         gsap.set('.growth-bar', { scaleY: 1 })
       }
     })
+    return () => ctx.revert()
+  }, [])
 
-    // ── Hero pointer tilt (desktop only) ────────────────────────────────
+  // ── Hero reveal + ambient effects: only once the boot overlay is done.
+  useEffect(() => {
+    if (!booted) return
+    const reduced = reducedMotion()
+
+    const ctx = gsap.context(() => {
+      if (!reduced) {
+        const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
+        tl.to('.hero-badge', { opacity: 1, y: 0, duration: 0.5 })
+          .to('.hw', { opacity: 1, yPercent: 0, rotateX: 0, duration: 0.85, stagger: 0.045, ease: 'back.out(1.6)' }, '-=0.25')
+          .to('.sub-w', { opacity: 1, y: 0, duration: 0.45, stagger: 0.012 }, '-=0.5')
+          .to('.hero-cta', { opacity: 1, y: 0, duration: 0.5 }, '-=0.25')
+        if (mockWrapRef.current) {
+          tl.to(mockWrapRef.current, { opacity: 1, scale: 1, y: 0, duration: 1.1, ease: 'elastic.out(1,0.75)' }, '-=0.55')
+        }
+        tl.add(() => {
+          if (!amountRef.current) return
+          const obj = { v: 0 }
+          gsap.to(obj, {
+            v: 240000,
+            duration: 1.1,
+            ease: 'power2.out',
+            onUpdate: () => { amountRef.current!.textContent = '₹' + Math.round(obj.v).toLocaleString('en-IN') },
+          })
+        }, '-=0.5')
+      }
+
+      // Marquee glitch pulse
+      if (!reduced) {
+        gsap.timeline({ repeat: -1, repeatDelay: 5 })
+          .to('.ticker-track', { filter: 'hue-rotate(50deg) saturate(2)', x: '+=6', duration: 0.08 })
+          .to('.ticker-track', { filter: 'hue-rotate(0deg) saturate(1)', x: '-=6', duration: 0.25 })
+      }
+    })
+
+    // Hero pointer tilt (desktop only)
     let removeTilt: (() => void) | undefined
     if (!reduced && heroRef.current && mockWrapRef.current) {
       const el = heroRef.current
@@ -396,7 +464,7 @@ export default function LandingPage() {
       removeTilt = () => el.removeEventListener('pointermove', onMove)
     }
 
-    // ── Lenis smooth scroll ──────────────────────────────────────────────
+    // Lenis smooth scroll
     let lenis: Lenis | undefined
     let tickerFn: ((time: number) => void) | undefined
     if (!reduced) {
