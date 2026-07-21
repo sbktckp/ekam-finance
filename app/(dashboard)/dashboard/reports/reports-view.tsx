@@ -65,12 +65,12 @@ function KPICard({ label, value, color, delta, invert, idx }: { label: string; v
   const { ref, inView } = useInView()
   const animated = useCountUp(value, inView)
   return (
-    <div ref={ref} className="surface-light rounded-2xl p-5 animate-fade-up" style={{ animationDelay: `${idx * 0.08}s`, animationFillMode: 'backwards' }}>
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
+    <div ref={ref} className="surface-light rounded-2xl p-3.5 sm:p-5 animate-fade-up min-w-0" style={{ animationDelay: `${idx * 0.08}s`, animationFillMode: 'backwards' }}>
+      <div className="flex items-center justify-between mb-2 gap-1">
+        <p className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-widest truncate min-w-0">{label}</p>
         <DeltaBadge pct={delta} invert={invert} />
       </div>
-      <p className="text-xl font-black" style={{ color, letterSpacing: '-0.02em' }}>{formatCurrency(animated, 'INR')}</p>
+      <p className="text-base sm:text-xl font-black truncate" style={{ color, letterSpacing: '-0.02em' }}>{formatCurrency(animated, 'INR')}</p>
       <p className="text-[10px] text-gray-400 mt-1">vs last month</p>
     </div>
   )
@@ -245,23 +245,23 @@ export function ReportsView({
       </div>
 
       {/* KPI row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <KPICard idx={0} label="Income"   value={thisMonth.income}  color="#10b981" delta={incomeDelta} />
         <KPICard idx={1} label="Expenses" value={thisMonth.expense} color="#f43f5e" delta={expenseDelta} invert />
         <KPICard idx={2} label="Net"      value={thisMonth.net}     color={thisMonth.net >= 0 ? '#10b981' : '#f43f5e'} delta={netDelta} />
       </div>
 
       {/* Secondary stat strip */}
-      <div className="grid grid-cols-4 gap-3 animate-fade-up delay-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 animate-fade-up delay-2">
         {[
           { l: 'Savings Rate', v: `${savingsRate.toFixed(0)}%`, c: savingsRate >= 20 ? '#34d399' : savingsRate >= 0 ? '#f59e0b' : '#f87171' },
           { l: 'Avg Daily Spend', v: formatCurrency(avgDailySpend, 'INR'), c: 'rgba(255,255,255,0.85)' },
           { l: 'Avg Transaction', v: formatCurrency(avgTxnSize, 'INR'), c: 'rgba(255,255,255,0.85)' },
           { l: 'Transactions', v: String(txnCount), c: 'rgba(255,255,255,0.85)' },
         ].map(s => (
-          <div key={s.l} className="surface-light rounded-2xl p-4">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">{s.l}</p>
-            <p className="text-base font-black" style={{ color: s.c }}>{s.v}</p>
+          <div key={s.l} className="surface-light rounded-2xl p-3.5 sm:p-4 min-w-0">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 truncate">{s.l}</p>
+            <p className="text-sm sm:text-base font-black truncate" style={{ color: s.c }}>{s.v}</p>
           </div>
         ))}
       </div>
@@ -339,7 +339,7 @@ export function ReportsView({
                 <div key={m.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black" style={{ background: 'rgba(244,63,94,0.14)', color: '#f87171' }}>{i + 1}</span>
-                    <span className="text-xs font-semibold text-gray-700 truncate max-w-[140px]">{m.name}</span>
+                    <span className="text-xs font-semibold text-gray-700 truncate max-w-[110px] sm:max-w-[140px]">{m.name}</span>
                   </div>
                   <span className="text-xs font-bold text-gray-500">{formatCurrency(m.amount, 'INR')}</span>
                 </div>
@@ -381,19 +381,19 @@ export function ReportsView({
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-100">
-              <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Month</th>
-              <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Income</th>
-              <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Expenses</th>
-              <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Net</th>
+              <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Month</th>
+              <th className="text-right px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Income</th>
+              <th className="text-right px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Expenses</th>
+              <th className="text-right px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Net</th>
             </tr>
           </thead>
           <tbody>
             {[...monthly].reverse().map(m => (
               <tr key={m.label} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
-                <td className="px-6 py-3.5 text-sm font-semibold text-gray-700">{m.label}</td>
-                <td className="px-6 py-3.5 text-right text-sm font-semibold text-emerald-600">{m.income > 0 ? formatCurrency(m.income, 'INR') : '—'}</td>
-                <td className="px-6 py-3.5 text-right text-sm font-semibold text-red-500">{m.expense > 0 ? formatCurrency(m.expense, 'INR') : '—'}</td>
-                <td className={`px-6 py-3.5 text-right text-sm font-black ${m.net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                <td className="px-3 sm:px-6 py-3.5 text-sm font-semibold text-gray-700">{m.label}</td>
+                <td className="px-3 sm:px-6 py-3.5 text-right text-sm font-semibold text-emerald-600">{m.income > 0 ? formatCurrency(m.income, 'INR') : '—'}</td>
+                <td className="px-3 sm:px-6 py-3.5 text-right text-sm font-semibold text-red-500">{m.expense > 0 ? formatCurrency(m.expense, 'INR') : '—'}</td>
+                <td className={`px-3 sm:px-6 py-3.5 text-right text-sm font-black ${m.net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                   {m.income > 0 || m.expense > 0 ? formatCurrency(m.net, 'INR') : '—'}
                 </td>
               </tr>
