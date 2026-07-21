@@ -94,10 +94,16 @@ function useMagnetic<T extends HTMLElement>(strength = 0.32) {
 }
 
 // ─── Small building blocks ──────────────────────────────────────────────────
-function Word({ children }: { children: string }) {
+// `gradient` puts the text-gradient class on THIS SAME element that GSAP
+// animates (opacity/transform), rather than on an ancestor wrapping it.
+// Applying opacity/transform to a *child* of a background-clip:text element
+// creates a new stacking context that breaks the gradient clip, rendering
+// the child invisible — so the animated element and the gradient element
+// must be one and the same.
+function Word({ children, gradient }: { children: string; gradient?: boolean }) {
   return (
     <span style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top' }}>
-      <span className="hw" style={{ display: 'inline-block' }}>{children}</span>
+      <span className={cn('hw', gradient && 'text-gradient')} style={{ display: 'inline-block' }}>{children}</span>
     </span>
   )
 }
@@ -513,7 +519,7 @@ export default function LandingPage() {
               </div>
               <h1 className="font-black leading-none mb-6" style={{ fontSize: 'clamp(48px, 6.5vw, 80px)', letterSpacing: '-0.03em' }}>
                 <Word>One</Word> <Word>app</Word> <Word>for</Word><br />
-                <span className="text-gradient"><Word>every</Word> <Word>rupee.</Word></span>
+                <Word gradient>every</Word> <Word gradient>rupee.</Word>
               </h1>
               <p className="text-lg mb-3 leading-relaxed" style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}>
                 <Words text="You know when your salary hits and by the 20th you have no idea where it went?" />
