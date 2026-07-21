@@ -13,6 +13,13 @@ import {
 import { Logo } from '@/components/shared/logo'
 import { cn } from '@/lib/utils'
 
+// ScrollTrigger must be registered before ANY component's effect creates a
+// ScrollTrigger instance. Registering here at module scope (client-only)
+// guarantees that, regardless of effect ordering between components.
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(ScrollTrigger)
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function reducedMotion() {
   if (typeof window === 'undefined') return true
@@ -310,7 +317,6 @@ export default function LandingPage() {
   useEffect(() => {
     if (!booted) return
     const reduced = reducedMotion()
-    gsap.registerPlugin(ScrollTrigger)
 
     const ctx = gsap.context(() => {
       // ── Hero entrance ──────────────────────────────────────────────────
