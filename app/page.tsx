@@ -644,7 +644,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative px-6 py-10" style={{ zIndex: 2, background: 'rgba(0,0,0,0.6)', borderTop: '1px solid rgba(255,255,255,0.055)', backdropFilter: 'blur(8px)' }}>
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-center md:justify-between gap-4">
           <Link href="/" className="flex items-center gap-2.5">
             <span className="w-7 h-7 rounded-md bg-white flex items-center justify-center overflow-hidden">
               <Logo size={18} />
@@ -659,10 +659,6 @@ export default function LandingPage() {
               Smit Bharat Patil
             </a>
           </p>
-          <div className="flex items-center gap-5 text-sm" style={{ color: 'rgba(255,255,255,0.28)' }}>
-            <Link href="/login" className="transition-colors hover:text-white">Sign in</Link>
-            <Link href="/signup" className="transition-colors hover:text-white">Sign up</Link>
-          </div>
         </div>
       </footer>
     </div>
