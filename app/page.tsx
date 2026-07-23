@@ -1,12 +1,12 @@
 'use client'
 
-/* ──────────────────────────────────────────────────────────────────────
+/* ──────────────────────────────────────────────────────────────────────────
    Ekam Finance — landing page
    A single scroll journey. A fixed WebGL particle cloud morphs through:
    chaos → ₹ → growth arrow → wallet → Ekam logo, while copy sections
    scroll over it. Emerald core + gold accents on black.
    Fallback: static layout for reduced-motion / no-WebGL / tiny screens.
-   ────────────────────────────────────────────────────────────────────── */
+   ────────────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
@@ -161,7 +161,7 @@ function logoTarget(count: number): Promise<Float32Array> {
   })
 }
 
-/* ───────────────────────────── shaders ────────────────────────────── */
+/* ───────────────────────────── shaders ──────────────────────────────── */
 
 const VERT = /* glsl */`
   attribute vec3 t0; attribute vec3 t1; attribute vec3 t2; attribute vec3 t3; attribute vec3 t4;
@@ -174,30 +174,29 @@ const VERT = /* glsl */`
   varying float vSeed;
   varying float vGlow;
 
-  vec3 pick(float idx) {
-    if (idx < 0.5) return t0;
-    if (idx < 1.5) return t1;
-    if (idx < 2.5) return t2;
-    if (idx < 3.5) return t3;
-    return t4;
-  }
-
   void main() {
     vSeed = aSeed;
-    float seg  = floor(clamp(uProgress, 0.0, 3.999));
-    float frac = smoothstep(0.0, 1.0, fract(clamp(uProgress, 0.0, 3.999)));
-    // per-particle stagger so the morph ripples instead of snapping
-    float f = clamp((frac - aSeed * 0.25) / 0.75, 0.0, 1.0);
+
+    // per-particle stagger, then ease each segment
+    float p   = clamp(uProgress - aSeed * 0.22, 0.0, 4.0);
+    float seg = floor(min(p, 3.999));
+    float f   = p - seg;
     f = f * f * (3.0 - 2.0 * f);
-    vec3 a = pick(seg);
-    vec3 b = pick(seg + 1.0);
-    vec3 pos = mix(a, b, f);
+    float q = seg + f;
+
+    // branch-free tent weights (sum to 1 for q in [0,4])
+    float w0 = max(0.0, 1.0 - abs(q - 0.0));
+    float w1 = max(0.0, 1.0 - abs(q - 1.0));
+    float w2 = max(0.0, 1.0 - abs(q - 2.0));
+    float w3 = max(0.0, 1.0 - abs(q - 3.0));
+    float w4 = max(0.0, 1.0 - abs(q - 4.0));
+    vec3 pos = t0 * w0 + t1 * w1 + t2 * w2 + t3 * w3 + t4 * w4;
 
     // chaos wobble — strongest at stage 0, fades as form resolves
-    float chaosAmp = mix(0.16, 0.02, clamp(uProgress / 1.0, 0.0, 1.0));
+    float chaosAmp = mix(0.15, 0.02, clamp(q, 0.0, 1.0));
     float t = uTime * 0.6 + aSeed * 6.2831;
     pos += vec3(
-      sin(t + pos.y * 3.1) ,
+      sin(t + pos.y * 3.1),
       cos(t * 1.3 + pos.x * 2.7),
       sin(t * 0.8 + pos.z * 4.0)
     ) * chaosAmp * (0.4 + aSeed * 0.6);
@@ -206,42 +205,41 @@ const VERT = /* glsl */`
     pos *= 1.0 + sin(uTime * 0.5 + aSeed * 3.0) * 0.012;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
-
-    // cursor repel + glow (screen-space approximation)
     vec4 clip = projectionMatrix * mv;
-    vec2 ndc = clip.xy / clip.w;
+    vec2 ndc = clip.xy / max(clip.w, 0.0001);
+
+    // cursor repel + glow
     float d = distance(ndc, uMouse);
-    float influence = (1.0 - smoothstep(0.0, 0.38, d)) * uMouseOn;
-    vGlow = influence;
-    mv.xy += normalize(ndc - uMouse + 0.0001) * influence * 0.22;
+    float infl = (1.0 - smoothstep(0.0, 0.4, d)) * uMouseOn;
+    vGlow = infl;
+    vec2 dir = ndc - uMouse;
+    float len = max(length(dir), 0.001);
+    mv.xy += (dir / len) * infl * 0.24;
 
     gl_Position = projectionMatrix * mv;
-    float size = (1.6 + aSeed * 2.6) * uPixelRatio;
-    gl_PointSize = size * (2.6 / -mv.z) * (1.0 + influence * 0.9);
+    gl_PointSize = (2.0 + aSeed * 3.5) * uPixelRatio * (3.0 / max(-mv.z, 0.1)) * (1.0 + infl * 0.8);
   }
 `
 
 const FRAG = /* glsl */`
-  precision mediump float;
   varying float vSeed;
   varying float vGlow;
   uniform float uTime;
 
   void main() {
-    // triangle sprite mask
+    // rotating triangle sprite mask
     vec2 p = gl_PointCoord * 2.0 - 1.0;
     float rot = vSeed * 6.2831 + uTime * (0.15 + vSeed * 0.35);
-    float c = cos(rot), s = sin(rot);
-    p = mat2(c, -s, s, c) * p;
-    // signed distance to unit triangle (approx)
+    float cr = cos(rot), sr = sin(rot);
+    p = mat2(cr, -sr, sr, cr) * p;
     float d = max(abs(p.x) * 0.866 + p.y * 0.5, -p.y * 0.9);
     float alpha = 1.0 - smoothstep(0.55, 0.78, d);
     if (alpha < 0.02) discard;
 
-    // emerald core → gold accent by seed, shimmer over time
-    vec3 emerald = vec3(0.063, 0.725, 0.506);   // #10b981
-    vec3 mint    = vec3(0.427, 0.906, 0.718);   // #6de7b7
-    vec3 gold    = vec3(0.961, 0.620, 0.043);   // #f59e0b
+    // emerald core -> gold accent by seed, shimmer over time
+    vec3 emerald = vec3(0.063, 0.725, 0.506);
+    vec3 mint    = vec3(0.427, 0.906, 0.718);
+    vec3 gold    = vec3(0.961, 0.620, 0.043);
     float band = fract(vSeed * 7.0 + uTime * 0.05);
     vec3 col = mix(emerald, mint, smoothstep(0.2, 0.8, vSeed));
     col = mix(col, gold, step(0.86, band) * 0.9);
@@ -250,6 +248,7 @@ const FRAG = /* glsl */`
     gl_FragColor = vec4(col, alpha * (0.55 + vSeed * 0.45));
   }
 `
+
 
 /* ─────────────────────────── particle canvas ────────────────────────── */
 
@@ -270,6 +269,7 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
     const isMobile = window.matchMedia('(max-width: 768px)').matches
     const COUNT = isMobile ? 3500 : 12000
 
+    renderer.setClearColor(0x000000, 0)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(window.innerWidth, window.innerHeight)
     mount.appendChild(renderer.domElement)
@@ -309,6 +309,7 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
     })
 
     const points = new THREE.Points(geo, mat)
+    points.frustumCulled = false
     scene.add(points)
 
     const mouse = new THREE.Vector2(10, 10)
@@ -404,7 +405,7 @@ function Stage({ align = 'left', kicker, title, children, innerRef }: {
   )
 }
 
-/* ─────────────────────────────── page ─────────────────────────────── */
+/* ─────────────────────────────── page ───────────────────────────────── */
 
 export default function LandingPage() {
   const progressRef = useRef(0)
