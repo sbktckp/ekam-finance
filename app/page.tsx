@@ -171,6 +171,7 @@ const VERT = /* glsl */`
   uniform vec2  uMouse;      // NDC
   uniform float uMouseOn;
   uniform float uPixelRatio;
+  uniform vec2  uShift;      // world-space cloud offset per stage
   varying float vSeed;
   varying float vGlow;
 
@@ -203,6 +204,9 @@ const VERT = /* glsl */`
 
     // gentle breathing
     pos *= 1.0 + sin(uTime * 0.5 + aSeed * 3.0) * 0.012;
+
+    // park the cloud opposite the copy for the current stage
+    pos.xy += uShift;
 
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     vec4 clip = projectionMatrix * mv;
@@ -305,6 +309,7 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
         uMouse:      { value: new THREE.Vector2(10, 10) },
         uMouseOn:    { value: isMobile ? 0 : 1 },
         uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        uShift:      { value: new THREE.Vector2(0, 0) },
       },
     })
 
@@ -325,12 +330,28 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
     }
     window.addEventListener('resize', onResize)
 
+    // cloud sits opposite each stage's copy: hero copy left, S1 right, S2 left, S3 right, S4 center
+    const SHIFT_X = [0.85, -0.8, 0.8, -0.8, 0]
+    const SHIFT_Y = [0, 0, 0, 0, 0.12]
+    const narrow = window.matchMedia('(max-width: 1024px)').matches
+    const shiftScale = narrow ? 0.35 : 1  // small screens: keep cloud near center behind copy
+
     let raf = 0
     const clock = new THREE.Clock()
     function tick() {
       mat.uniforms.uTime.value = clock.getElapsedTime()
       mat.uniforms.uProgress.value += (progressRef.current - mat.uniforms.uProgress.value) * 0.08
       mat.uniforms.uMouse.value.lerp(mouse, 0.12)
+
+      // blend stage shifts with the same tent weights as the shader
+      const q = Math.max(0, Math.min(4, mat.uniforms.uProgress.value))
+      let sx = 0, sy = 0
+      for (let n = 0; n <= 4; n++) {
+        const w = Math.max(0, 1 - Math.abs(q - n))
+        sx += SHIFT_X[n] * w; sy += SHIFT_Y[n] * w
+      }
+      mat.uniforms.uShift.value.set(sx * shiftScale, sy)
+
       points.rotation.y = Math.sin(clock.elapsedTime * 0.08) * 0.12
       renderer.render(scene, camera)
       raf = requestAnimationFrame(tick)
@@ -352,6 +373,44 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
       className="fixed inset-0 pointer-events-none"
       style={{ zIndex: 0, background: 'radial-gradient(ellipse 70% 55% at 50% 40%, rgba(16,185,129,0.05) 0%, transparent 65%), #030303' }}
     />
+  )
+}
+
+
+/* ──────────────────── stage progress rail (desktop) ─────────────────── */
+
+const STAGE_LABELS = ['Start', 'Tools', 'India', 'Handled', 'Go']
+
+function StageRail({ progressRef }: { progressRef: React.MutableRefObject<number> }) {
+  const dotRefs = useRef<(HTMLDivElement | null)[]>([])
+  useEffect(() => {
+    let raf = 0
+    function tick() {
+      const p = progressRef.current
+      dotRefs.current.forEach((el, i) => {
+        if (!el) return
+        const w = Math.max(0, 1 - Math.abs(p - i))
+        el.style.opacity = String(0.25 + w * 0.75)
+        el.style.transform = `scale(${1 + w * 0.6})`
+        const label = el.nextElementSibling as HTMLElement | null
+        if (label) label.style.opacity = String(w > 0.55 ? 0.85 : 0)
+      })
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [progressRef])
+  return (
+    <div className="fixed right-6 top-1/2 -translate-y-1/2 hidden lg:flex flex-col items-end gap-5" style={{ zIndex: 9 }}>
+      {STAGE_LABELS.map((l, i) => (
+        <div key={l} className="flex items-center gap-2 flex-row-reverse">
+          <div ref={el => { dotRefs.current[i] = el }} className="w-2 h-2 rounded-full transition-transform duration-300"
+            style={{ background: '#34d399', opacity: 0.25 }} />
+          <span className="text-[10px] uppercase tracking-widest font-semibold transition-opacity duration-300"
+            style={{ color: 'rgba(255,255,255,0.6)', opacity: 0 }}>{l}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -394,7 +453,7 @@ function Stage({ align = 'left', kicker, title, children, innerRef }: {
     : align === 'right' ? 'items-end text-right ml-auto' : 'items-start text-left'
   return (
     <section className="relative min-h-screen flex items-center px-6" style={{ zIndex: 2 }}>
-      <div ref={innerRef} className={`stage-copy max-w-6xl mx-auto w-full flex flex-col ${alignCls}`}>
+      <div ref={innerRef} className={`stage-copy max-w-6xl mx-auto w-full flex flex-col ${alignCls}`} style={{ textShadow: '0 2px 24px rgba(0,0,0,0.85)' }}>
         <div className="max-w-md">
           {kicker && <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#10b981' }}>{kicker}</p>}
           <h2 className="font-black text-white mb-5" style={{ fontSize: 'clamp(30px, 4.5vw, 52px)', letterSpacing: '-0.025em', lineHeight: 1.08 }}>{title}</h2>
@@ -455,6 +514,7 @@ export default function LandingPage() {
     <div ref={mainRef} className="relative" style={{ background: '#030303', color: '#fff' }}>
       {!reduced && <ParticleField progressRef={progressRef} />}
       {!reduced && <DriftTriangles />}
+      {!reduced && <StageRail progressRef={progressRef} />}
       {reduced && (
         <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0, background: 'radial-gradient(ellipse 70% 55% at 50% 35%, rgba(16,185,129,0.12) 0%, transparent 65%), #030303' }} />
       )}
@@ -464,7 +524,9 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex items-center justify-between rounded-2xl px-4 py-2.5"
           style={{ background: 'rgba(8,8,8,0.55)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.07)' }}>
           <Link href="/" className="flex items-center gap-2.5">
-            <Logo size={24} />
+            <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden">
+              <Logo size={22} />
+            </span>
             <span className="text-sm font-bold tracking-tight">ekam</span>
           </Link>
           <nav className="flex items-center gap-5">
@@ -516,7 +578,10 @@ export default function LandingPage() {
       </section>
 
       {/* Stage 1 — ₹ : every rupee tracked */}
-      <Stage align="right" kicker="What it does" title={<>Eight tools.<br />One tab.</>}>
+      <Stage align="right" kicker="Every rupee, accounted" title={<>Eight tools.<br />One tab.</>}>
+        <p className="text-base leading-relaxed mb-5" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          Everything your money touches, tracked in one place. No tab hopping, no spreadsheets.
+        </p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-2">
           {TOOLS.map(t => {
             const Icon = t.icon
@@ -538,15 +603,23 @@ export default function LandingPage() {
 
       {/* Stage 2 — arrow : growth */}
       <Stage align="left" kicker="Built for India" title={<>INR first.<br />April tax year.<br />Kolkata timezone.</>}>
-        <p className="text-base leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+        <p className="text-base leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Not a US app retrofitted for India. Every default was chosen for how Indians actually manage money.
         </p>
+        <div className="flex flex-wrap gap-2">
+          {['SIPs and stocks', 'Crypto too', 'AI monthly digest'].map(chip => (
+            <span key={chip} className="px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#6ee7b7' }}>
+              {chip}
+            </span>
+          ))}
+        </div>
       </Stage>
 
       {/* Stage 3 — wallet : everything handled */}
-      <Stage align="right" kicker="Yours, always" title={<>Budgets, bills,<br />goals — handled.</>}>
+      <Stage align="right" kicker="Yours, always" title={<>Budgets, bills,<br />goals. Handled.</>}>
         <p className="text-base leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
-          Set monthly limits, never miss a payment, and save toward what matters — all in one place.
+          Set monthly limits, never miss a payment, and save toward what matters. All in one place.
         </p>
         <div className="inline-flex flex-col gap-1 px-5 py-4 rounded-2xl text-left"
           style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
@@ -573,7 +646,9 @@ export default function LandingPage() {
       <footer className="relative px-6 py-10" style={{ zIndex: 2, background: 'rgba(0,0,0,0.6)', borderTop: '1px solid rgba(255,255,255,0.055)', backdropFilter: 'blur(8px)' }}>
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
           <Link href="/" className="flex items-center gap-2.5">
-            <Logo size={20} />
+            <span className="w-7 h-7 rounded-md bg-white flex items-center justify-center overflow-hidden">
+              <Logo size={18} />
+            </span>
             <span className="text-sm" style={{ color: 'rgba(255,255,255,0.28)' }}>Ekam Finance</span>
           </Link>
           <p className="text-sm text-center" style={{ color: 'rgba(255,255,255,0.28)' }}>
