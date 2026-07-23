@@ -355,8 +355,10 @@ export function ReportsView({
           <h2 className="text-sm font-bold text-gray-900 mb-4">Spending by Day of Week</h2>
           <div className="flex items-end gap-2 h-24">
             {byDayOfWeek.map(d => (
-              <div key={d.label} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="w-full rounded-t-md transition-all duration-700" style={{ height: `${(d.amount / maxDow) * 100}%`, minHeight: d.amount > 0 ? '4px' : '0', background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }} />
+              <div key={d.label} className="flex-1 h-full flex flex-col justify-end items-center gap-1.5">
+                <div className="w-full flex items-end" style={{ height: '80px' }}>
+                  <div className="w-full rounded-t-md transition-all duration-700" style={{ height: `${(d.amount / maxDow) * 100}%`, minHeight: d.amount > 0 ? '4px' : '0', background: 'linear-gradient(180deg,#a78bfa,#7c3aed)' }} />
+                </div>
                 <span className="text-[10px] text-gray-400 font-semibold">{d.label}</span>
               </div>
             ))}
