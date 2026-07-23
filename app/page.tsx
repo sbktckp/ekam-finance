@@ -1,632 +1,575 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+/* ──────────────────────────────────────────────────────────────────────
+   Ekam Finance — landing page
+   A single scroll journey. A fixed WebGL particle cloud morphs through:
+   chaos → ₹ → growth arrow → wallet → Ekam logo, while copy sections
+   scroll over it. Emerald core + gold accents on black.
+   Fallback: static layout for reduced-motion / no-WebGL / tiny screens.
+   ────────────────────────────────────────────────────────────────────── */
+
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import * as THREE from 'three'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
 import {
-  LayoutDashboard, ArrowLeftRight, Calculator,
-  TrendingUp, Target, CalendarClock, BarChart3, Shield,
-  ArrowUpRight,
+  ArrowUpRight, LayoutDashboard, ArrowLeftRight, Calculator, TrendingUp,
+  Target, CalendarClock, BarChart3, Shield,
 } from 'lucide-react'
 import { Logo } from '@/components/shared/logo'
-import { cn } from '@/lib/utils'
 
-// ScrollTrigger must be registered before ANY component's effect creates a
-// ScrollTrigger instance — doing it at module scope (client-only) guarantees
-// that regardless of effect ordering between components.
-if (typeof window !== 'undefined') {
-  gsap.registerPlugin(ScrollTrigger)
-}
+gsap.registerPlugin(ScrollTrigger)
 
-// useEffect runs after paint; useLayoutEffect runs before the browser paints,
-// which matters for setting hidden-by-default animation states so nothing
-// ever flashes visible for a frame. Falls back to useEffect during SSR.
-const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function reducedMotion() {
-  if (typeof window === 'undefined') return true
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
-
-function useScrolled(threshold = 20) {
-  const [scrolled, setScrolled] = useState(false)
-  useEffect(() => {
-    const fn = () => setScrolled(window.scrollY > threshold)
-    window.addEventListener('scroll', fn, { passive: true })
-    return () => window.removeEventListener('scroll', fn)
-  }, [threshold])
-  return scrolled
-}
-
-function useInView(threshold = 0.15) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [inView, setInView] = useState(false)
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) setInView(true) },
-      { threshold }
-    )
-    if (ref.current) obs.observe(ref.current)
-    return () => obs.disconnect()
-  }, [threshold])
-  return { ref, inView }
-}
-
-function useCounter(target: number, active: boolean, ms = 1600) {
-  const [v, setV] = useState(0)
-  useEffect(() => {
-    if (!active) return
-    const t0 = performance.now()
-    const tick = (now: number) => {
-      const p = Math.min((now - t0) / ms, 1)
-      setV(Math.round((1 - Math.pow(1 - p, 3)) * target))
-      if (p < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-  }, [active, target, ms])
-  return v
-}
-
-function useMagnetic<T extends HTMLElement>(strength = 0.32) {
-  const ref = useRef<T | null>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || reducedMotion()) return
-    const xTo = gsap.quickTo(el, 'x', { duration: 0.45, ease: 'power3.out' })
-    const yTo = gsap.quickTo(el, 'y', { duration: 0.45, ease: 'power3.out' })
-    const onMove = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect()
-      xTo((e.clientX - r.left - r.width / 2) * strength)
-      yTo((e.clientY - r.top - r.height / 2) * (strength + 0.15))
-    }
-    const onLeave = () => { xTo(0); yTo(0) }
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerleave', onLeave)
-    return () => {
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerleave', onLeave)
-    }
-  }, [strength])
-  return ref
-}
-
-// ─── Small building blocks ──────────────────────────────────────────────────
-// `gradient` puts the text-gradient class on THIS SAME element that GSAP
-// animates (opacity/transform), rather than on an ancestor wrapping it.
-// Applying opacity/transform to a *child* of a background-clip:text element
-// creates a new stacking context that breaks the gradient clip, rendering
-// the child invisible — so the animated element and the gradient element
-// must be one and the same.
-function Word({ children, gradient }: { children: string; gradient?: boolean }) {
-  return (
-    <span style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top' }}>
-      <span className={cn('hw', gradient && 'text-gradient')} style={{ display: 'inline-block' }}>{children}</span>
-    </span>
-  )
-}
-
-function Words({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(' ').map((w, i) => (
-        <span key={i} className="sub-w" style={{ display: 'inline-block' }}>{w}&nbsp;</span>
-      ))}
-    </>
-  )
-}
-
-function Reveal({ children, className, style, delay = 0, y = 28 }: {
-  children: React.ReactNode; className?: string; style?: React.CSSProperties; delay?: number; y?: number
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  useIsomorphicLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    if (reducedMotion()) { gsap.set(el, { opacity: 1, y: 0 }); return }
-    gsap.set(el, { opacity: 0, y })
-  }, [y])
-  useEffect(() => {
-    const el = ref.current
-    if (!el || reducedMotion()) return
-    const st = ScrollTrigger.create({
-      trigger: el,
-      start: 'top 85%',
-      once: true,
-      onEnter: () => gsap.to(el, { opacity: 1, y: 0, duration: 0.8, delay, ease: 'power3.out' }),
-    })
-    return () => st.kill()
-  }, [delay])
-  return <div ref={ref} className={className} style={style}>{children}</div>
-}
-
-function TiltCard({ children, className, style }: {
-  children: React.ReactNode; className?: string; style?: React.CSSProperties
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const el = ref.current
-    if (!el || reducedMotion()) return
-    const rx = gsap.quickTo(el, 'rotateX', { duration: 0.5, ease: 'power3.out' })
-    const ry = gsap.quickTo(el, 'rotateY', { duration: 0.5, ease: 'power3.out' })
-    const onMove = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect()
-      const px = (e.clientX - r.left) / r.width
-      const py = (e.clientY - r.top) / r.height
-      ry((px - 0.5) * 12)
-      rx(-(py - 0.5) * 12)
-      el.style.setProperty('--mx', `${px * 100}%`)
-      el.style.setProperty('--my', `${py * 100}%`)
-      el.style.setProperty('--sheen', '0.10')
-    }
-    const onLeave = () => { rx(0); ry(0); el.style.setProperty('--sheen', '0') }
-    el.addEventListener('pointermove', onMove)
-    el.addEventListener('pointerleave', onLeave)
-    return () => {
-      el.removeEventListener('pointermove', onMove)
-      el.removeEventListener('pointerleave', onLeave)
-    }
-  }, [])
-  return <div ref={ref} className={cn('tilt-card', className)} style={style}>{children}</div>
-}
-
-function AmbientRupees({ count = 9 }: { count?: number }) {
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (reducedMotion() || !ref.current) return
-    const els = ref.current.querySelectorAll<HTMLElement>('.particle')
-    els.forEach((el, i) => {
-      gsap.set(el, { y: 40, opacity: 0, x: gsap.utils.random(-20, 20) })
-      gsap.to(el, {
-        y: -520,
-        opacity: 'random(0.05,0.16)',
-        x: 'random(-30,30)',
-        duration: gsap.utils.random(10, 17),
-        repeat: -1,
-        delay: i * 1.15,
-        ease: 'none',
-      })
-    })
-  }, [])
-  return (
-    <div ref={ref} className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-      {Array.from({ length: count }).map((_, i) => (
-        <span key={i} className="particle absolute font-bold select-none"
-          style={{ left: `${6 + i * (90 / count)}%`, bottom: 0, fontSize: `${12 + (i % 3) * 6}px`, color: '#34d399' }}>₹</span>
-      ))}
-    </div>
-  )
-}
-
-// ─── Boot / loading screen ───────────────────────────────────────────────────
-const BOOT_STATUS = [
-  'Reconciling your ledger…',
-  'Locking ₹ exchange rates…',
-  'Encrypting your vault…',
-  'Preparing your dashboard…',
-]
-
-function BootOverlay({ onDone }: { onDone: () => void }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [visible, setVisible] = useState(true)
-  const [pct, setPct] = useState(0)
-
-  useEffect(() => {
-    if (reducedMotion()) { onDone(); setVisible(false); return }
-    document.body.style.overflow = 'hidden'
-    const counter = { v: 0 }
-
-    const ctx = gsap.context(() => {
-      const lines = gsap.utils.toArray<HTMLElement>('.boot-status-line')
-      const tl = gsap.timeline()
-
-      tl.to('.boot-logo', { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' })
-        .addLabel('progress')
-
-      lines.forEach((el, i) => {
-        tl.to(el, { opacity: 1, duration: 0.16 }, `progress+=${i * 0.275}`)
-          .to(el, { opacity: 0, duration: 0.16 }, `progress+=${i * 0.275 + 0.2}`)
-      })
-
-      tl.to(counter, {
-        v: 100, duration: 1.1, ease: 'power2.inOut',
-        onUpdate: () => setPct(Math.round(counter.v)),
-      }, 'progress')
-        .to('.boot-bar-fill', { scaleX: 1, duration: 1.1, ease: 'power2.inOut' }, 'progress')
-        .addLabel('done', 'progress+=1.2')
-        .add(() => {
-          document.body.style.overflow = ''
-          onDone()
-        }, 'done')
-        .to(ref.current, { opacity: 0, scale: 1.04, filter: 'blur(6px)', duration: 0.55, ease: 'power2.inOut' }, 'done')
-        .add(() => setVisible(false))
-    }, ref)
-
-    return () => ctx.revert()
-  }, [onDone])
-
-  if (!visible) return null
-
-  return (
-    <div ref={ref} className="fixed inset-0 z-[100] flex flex-col items-center justify-center px-6 grid-bg" style={{ background: '#040404' }}>
-      <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 60% 45% at 50% 45%, rgba(16,185,129,0.10) 0%, transparent 70%)' }} />
-      <AmbientRupees count={7} />
-      <div className="relative z-10 flex flex-col items-center">
-        <div className="boot-logo flex items-center gap-2.5 mb-9 opacity-0" style={{ transform: 'translateY(10px)' }}>
-          <div className="relative">
-            <div className="absolute inset-0 scale-[2.2] rounded-full animate-breathe" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)' }} />
-            <Logo size={34} />
-          </div>
-          <span className="text-base font-semibold tracking-wide text-white">Ekam Finance</span>
-        </div>
-
-        <div className="relative h-4 w-64 sm:w-80 text-center mb-5">
-          {BOOT_STATUS.map((t, i) => (
-            <p key={i} className="boot-status-line absolute inset-0 opacity-0 text-[11px] tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.45)' }}>{t}</p>
-          ))}
-        </div>
-
-        <div className="w-64 sm:w-80 h-[3px] rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
-          <div className="boot-bar-fill h-full rounded-full" style={{ background: 'linear-gradient(90deg,#10b981,#34d399)', transform: 'scaleX(0)', transformOrigin: 'left' }} />
-        </div>
-        <div className="flex items-center justify-between w-64 sm:w-80 mt-2">
-          <span className="text-[10px] tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.28)' }}>Loading</span>
-          <span className="text-[10px] font-bold tabular-nums" style={{ color: '#34d399' }}>{pct}%</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Content data ────────────────────────────────────────────────────────────
 const TOOLS = [
-  { icon: LayoutDashboard, label: 'Dashboard',    note: 'Net worth at a glance'             },
-  { icon: ArrowLeftRight,  label: 'Transactions', note: 'Every rupee, logged'               },
-  { icon: Calculator,      label: 'Budget',        note: 'Monthly limits by category'        },
-  { icon: TrendingUp,      label: 'Investments',  note: 'Stocks, SIPs, crypto, more'        },
-  { icon: Target,          label: 'Goals',         note: 'Save toward what matters'          },
-  { icon: CalendarClock,   label: 'Bills',         note: 'No payment slips through'          },
-  { icon: BarChart3,       label: 'Reports',       note: 'Calendar view, charts, AI digest'  },
-  { icon: Shield,          label: 'Secure',        note: 'Your data stays yours'             },
+  { icon: LayoutDashboard, label: 'Dashboard',    note: 'Net worth at a glance'            },
+  { icon: ArrowLeftRight,  label: 'Transactions', note: 'Every rupee, logged'              },
+  { icon: Calculator,      label: 'Budget',       note: 'Monthly limits by category'       },
+  { icon: TrendingUp,      label: 'Investments',  note: 'Stocks, SIPs, crypto, more'       },
+  { icon: Target,          label: 'Goals',        note: 'Save toward what matters'         },
+  { icon: CalendarClock,   label: 'Bills',        note: 'No payment slips through'         },
+  { icon: BarChart3,       label: 'Reports',      note: 'Calendar view, charts, AI digest' },
+  { icon: Shield,          label: 'Secure',       note: 'Your data stays yours'            },
 ]
 
-const BARS = [18, 32, 26, 55, 40, 70, 52, 84, 60, 76, 48, 90]
-const GROWTH_BARS = [22, 28, 26, 40, 36, 52, 46, 64, 58, 74, 68, 86, 80, 100]
+/* ────────────────────────── shape target generation ───────────────────────
+   Each morph target is a Float32Array of xyz positions in a roughly
+   [-1,1] world box. Glyph-based targets are rasterized from an offscreen
+   canvas and sampled where ink exists; z gets small noise for depth.     */
 
-const TICKER = [
-  'Dashboard', 'Transactions', 'Budget', 'Investments',
-  'Goals', 'Bills', 'Reports', 'AI Insights', 'INR native',
-  'Dashboard', 'Transactions', 'Budget', 'Investments',
-  'Goals', 'Bills', 'Reports', 'AI Insights', 'INR native',
-]
+function jitter(mag: number) { return (Math.random() - 0.5) * 2 * mag }
 
-function MockCard({ amountRef }: { amountRef: React.RefObject<HTMLParagraphElement | null> }) {
+function chaosTarget(count: number): Float32Array {
+  // loose swarm: gaussian-ish ball with strays
+  const arr = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) {
+    const r = Math.pow(Math.random(), 0.42) * 1.35
+    const th = Math.random() * Math.PI * 2
+    const ph = Math.acos(2 * Math.random() - 1)
+    arr[i * 3]     = r * Math.sin(ph) * Math.cos(th)
+    arr[i * 3 + 1] = r * Math.sin(ph) * Math.sin(th) * 0.8
+    arr[i * 3 + 2] = r * Math.cos(ph) * 0.55
+  }
+  return arr
+}
+
+function sampleCanvas(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, count: number, depth = 0.16): Float32Array {
+  const S = 320
+  const cv = document.createElement('canvas')
+  cv.width = S; cv.height = S
+  const ctx = cv.getContext('2d')!
+  ctx.clearRect(0, 0, S, S)
+  ctx.fillStyle = '#fff'
+  ctx.strokeStyle = '#fff'
+  draw(ctx, S, S)
+  const img = ctx.getImageData(0, 0, S, S).data
+  const pts: number[] = []
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+    if (img[(y * S + x) * 4 + 3] > 100) pts.push(x, y)
+  }
+  const arr = new Float32Array(count * 3)
+  const n = pts.length / 2
+  for (let i = 0; i < count; i++) {
+    const k = (Math.random() * n) | 0
+    const px = pts[k * 2], py = pts[k * 2 + 1]
+    arr[i * 3]     = ((px / S) * 2 - 1) * 1.15 + jitter(0.012)
+    arr[i * 3 + 1] = (1 - (py / S) * 2) * 1.15 + jitter(0.012)
+    arr[i * 3 + 2] = jitter(depth)
+  }
+  return arr
+}
+
+function rupeeTarget(count: number): Float32Array {
+  return sampleCanvas((ctx, w, h) => {
+    ctx.font = `900 ${h * 0.82}px Arial, sans-serif`
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText('₹', w / 2, h / 2 + h * 0.03)
+  }, count)
+}
+
+function arrowTarget(count: number): Float32Array {
+  return sampleCanvas((ctx, w, h) => {
+    ctx.lineWidth = h * 0.075
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'
+    // rising zig-zag
+    ctx.beginPath()
+    ctx.moveTo(w * 0.10, h * 0.82)
+    ctx.lineTo(w * 0.34, h * 0.55)
+    ctx.lineTo(w * 0.52, h * 0.68)
+    ctx.lineTo(w * 0.86, h * 0.22)
+    ctx.stroke()
+    // arrow head
+    ctx.beginPath()
+    ctx.moveTo(w * 0.62, h * 0.20)
+    ctx.lineTo(w * 0.88, h * 0.18)
+    ctx.lineTo(w * 0.87, h * 0.44)
+    ctx.closePath()
+    ctx.fill()
+    // baseline candles
+    const bars = [0.30, 0.48, 0.40, 0.62]
+    bars.forEach((bh, i) => {
+      const bx = w * (0.14 + i * 0.2)
+      ctx.fillRect(bx, h * (0.92 - bh * 0.28), w * 0.055, h * bh * 0.28)
+    })
+  }, count)
+}
+
+function walletTarget(count: number): Float32Array {
+  return sampleCanvas((ctx, w, h) => {
+    const r = w * 0.06
+    // body
+    roundRect(ctx, w * 0.12, h * 0.30, w * 0.76, h * 0.46, r); ctx.fill()
+    // flap notch (cut a hole then add clasp)
+    ctx.globalCompositeOperation = 'destination-out'
+    roundRect(ctx, w * 0.60, h * 0.44, w * 0.34, h * 0.18, r * 0.7); ctx.fill()
+    ctx.globalCompositeOperation = 'source-over'
+    roundRect(ctx, w * 0.63, h * 0.47, w * 0.28, h * 0.12, r * 0.55); ctx.fill()
+    // coin above
+    ctx.beginPath(); ctx.arc(w * 0.5, h * 0.16, h * 0.075, 0, Math.PI * 2); ctx.fill()
+  }, count)
+}
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.arcTo(x + w, y, x + w, y + h, r)
+  ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r)
+  ctx.arcTo(x, y, x + w, y, r)
+  ctx.closePath()
+}
+
+function logoTarget(count: number): Promise<Float32Array> {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => {
+      resolve(sampleCanvas((ctx, w, h) => {
+        const s = Math.min(w, h) * 0.78
+        ctx.drawImage(img, (w - s) / 2, (h - s) / 2, s, s)
+      }, count))
+    }
+    img.onerror = () => {
+      // fallback: wordmark
+      resolve(sampleCanvas((ctx, w, h) => {
+        ctx.font = `900 ${h * 0.34}px Arial, sans-serif`
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+        ctx.fillText('ekam', w / 2, h / 2)
+      }, count))
+    }
+    img.src = '/logo.png'
+  })
+}
+
+/* ───────────────────────────── shaders ────────────────────────────── */
+
+const VERT = /* glsl */`
+  attribute vec3 t0; attribute vec3 t1; attribute vec3 t2; attribute vec3 t3; attribute vec3 t4;
+  attribute float aSeed;
+  uniform float uProgress;   // 0..4
+  uniform float uTime;
+  uniform vec2  uMouse;      // NDC
+  uniform float uMouseOn;
+  uniform float uPixelRatio;
+  varying float vSeed;
+  varying float vGlow;
+
+  vec3 pick(float idx) {
+    if (idx < 0.5) return t0;
+    if (idx < 1.5) return t1;
+    if (idx < 2.5) return t2;
+    if (idx < 3.5) return t3;
+    return t4;
+  }
+
+  void main() {
+    vSeed = aSeed;
+    float seg  = floor(clamp(uProgress, 0.0, 3.999));
+    float frac = smoothstep(0.0, 1.0, fract(clamp(uProgress, 0.0, 3.999)));
+    // per-particle stagger so the morph ripples instead of snapping
+    float f = clamp((frac - aSeed * 0.25) / 0.75, 0.0, 1.0);
+    f = f * f * (3.0 - 2.0 * f);
+    vec3 a = pick(seg);
+    vec3 b = pick(seg + 1.0);
+    vec3 pos = mix(a, b, f);
+
+    // chaos wobble — strongest at stage 0, fades as form resolves
+    float chaosAmp = mix(0.16, 0.02, clamp(uProgress / 1.0, 0.0, 1.0));
+    float t = uTime * 0.6 + aSeed * 6.2831;
+    pos += vec3(
+      sin(t + pos.y * 3.1) ,
+      cos(t * 1.3 + pos.x * 2.7),
+      sin(t * 0.8 + pos.z * 4.0)
+    ) * chaosAmp * (0.4 + aSeed * 0.6);
+
+    // gentle breathing
+    pos *= 1.0 + sin(uTime * 0.5 + aSeed * 3.0) * 0.012;
+
+    vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+
+    // cursor repel + glow (screen-space approximation)
+    vec4 clip = projectionMatrix * mv;
+    vec2 ndc = clip.xy / clip.w;
+    float d = distance(ndc, uMouse);
+    float influence = (1.0 - smoothstep(0.0, 0.38, d)) * uMouseOn;
+    vGlow = influence;
+    mv.xy += normalize(ndc - uMouse + 0.0001) * influence * 0.22;
+
+    gl_Position = projectionMatrix * mv;
+    float size = (1.6 + aSeed * 2.6) * uPixelRatio;
+    gl_PointSize = size * (2.6 / -mv.z) * (1.0 + influence * 0.9);
+  }
+`
+
+const FRAG = /* glsl */`
+  precision mediump float;
+  varying float vSeed;
+  varying float vGlow;
+  uniform float uTime;
+
+  void main() {
+    // triangle sprite mask
+    vec2 p = gl_PointCoord * 2.0 - 1.0;
+    float rot = vSeed * 6.2831 + uTime * (0.15 + vSeed * 0.35);
+    float c = cos(rot), s = sin(rot);
+    p = mat2(c, -s, s, c) * p;
+    // signed distance to unit triangle (approx)
+    float d = max(abs(p.x) * 0.866 + p.y * 0.5, -p.y * 0.9);
+    float alpha = 1.0 - smoothstep(0.55, 0.78, d);
+    if (alpha < 0.02) discard;
+
+    // emerald core → gold accent by seed, shimmer over time
+    vec3 emerald = vec3(0.063, 0.725, 0.506);   // #10b981
+    vec3 mint    = vec3(0.427, 0.906, 0.718);   // #6de7b7
+    vec3 gold    = vec3(0.961, 0.620, 0.043);   // #f59e0b
+    float band = fract(vSeed * 7.0 + uTime * 0.05);
+    vec3 col = mix(emerald, mint, smoothstep(0.2, 0.8, vSeed));
+    col = mix(col, gold, step(0.86, band) * 0.9);
+    col += vGlow * 0.55;
+
+    gl_FragColor = vec4(col, alpha * (0.55 + vSeed * 0.45));
+  }
+`
+
+/* ─────────────────────────── particle canvas ────────────────────────── */
+
+function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<number> }) {
+  const mountRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const mount = mountRef.current
+    if (!mount) return
+
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' })
+    } catch {
+      return // no WebGL — CSS fallback bg remains
+    }
+
+    const isMobile = window.matchMedia('(max-width: 768px)').matches
+    const COUNT = isMobile ? 3500 : 12000
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setSize(window.innerWidth, window.innerHeight)
+    mount.appendChild(renderer.domElement)
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 20)
+    camera.position.z = 3.1
+
+    const geo = new THREE.BufferGeometry()
+    const seeds = new Float32Array(COUNT)
+    for (let i = 0; i < COUNT; i++) seeds[i] = Math.random()
+    geo.setAttribute('position', new THREE.BufferAttribute(chaosTarget(COUNT), 3)) // required by three
+    geo.setAttribute('t0', new THREE.BufferAttribute(chaosTarget(COUNT), 3))
+    geo.setAttribute('t1', new THREE.BufferAttribute(rupeeTarget(COUNT), 3))
+    geo.setAttribute('t2', new THREE.BufferAttribute(arrowTarget(COUNT), 3))
+    geo.setAttribute('t3', new THREE.BufferAttribute(walletTarget(COUNT), 3))
+    geo.setAttribute('t4', new THREE.BufferAttribute(chaosTarget(COUNT), 3)) // placeholder until logo loads
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1))
+
+    logoTarget(COUNT).then(arr => {
+      geo.setAttribute('t4', new THREE.BufferAttribute(arr, 3))
+    })
+
+    const mat = new THREE.ShaderMaterial({
+      vertexShader: VERT,
+      fragmentShader: FRAG,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      uniforms: {
+        uProgress:   { value: 0 },
+        uTime:       { value: 0 },
+        uMouse:      { value: new THREE.Vector2(10, 10) },
+        uMouseOn:    { value: isMobile ? 0 : 1 },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      },
+    })
+
+    const points = new THREE.Points(geo, mat)
+    scene.add(points)
+
+    const mouse = new THREE.Vector2(10, 10)
+    function onMove(e: PointerEvent) {
+      mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1)
+    }
+    if (!isMobile) window.addEventListener('pointermove', onMove, { passive: true })
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight
+      camera.updateProjectionMatrix()
+      renderer.setSize(window.innerWidth, window.innerHeight)
+    }
+    window.addEventListener('resize', onResize)
+
+    let raf = 0
+    const clock = new THREE.Clock()
+    function tick() {
+      mat.uniforms.uTime.value = clock.getElapsedTime()
+      mat.uniforms.uProgress.value += (progressRef.current - mat.uniforms.uProgress.value) * 0.08
+      mat.uniforms.uMouse.value.lerp(mouse, 0.12)
+      points.rotation.y = Math.sin(clock.elapsedTime * 0.08) * 0.12
+      renderer.render(scene, camera)
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', onResize)
+      if (!isMobile) window.removeEventListener('pointermove', onMove)
+      geo.dispose(); mat.dispose(); renderer.dispose()
+      mount.removeChild(renderer.domElement)
+    }
+  }, [progressRef])
+
   return (
-    <div className="relative animate-float w-[300px]">
-      <div className="absolute -inset-6 rounded-full animate-breathe" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.14) 0%, transparent 70%)' }} />
-      <div className="relative rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(145deg, #141414 0%, #0d0d0d 100%)', border: '1px solid rgba(255,255,255,0.09)', boxShadow: '0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04)' }}>
-        <div className="px-4 py-2.5 flex items-center gap-1.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.3)' }}>
-          <span className="w-2 h-2 rounded-full" style={{ background: '#ff5f57' }} />
-          <span className="w-2 h-2 rounded-full" style={{ background: '#febc2e' }} />
-          <span className="w-2 h-2 rounded-full" style={{ background: '#28c840' }} />
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <p className="text-[10px] mb-0.5" style={{ color: 'rgba(255,255,255,0.28)' }}>Good evening, Smit</p>
-            <p ref={amountRef} className="text-[22px] font-black text-white tracking-tight tabular-nums">₹0</p>
-            <p className="text-[10px]" style={{ color: '#34d399' }}>Net worth</p>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            {[
-              { l: 'Income', v: '₹85k', c: '#60a5fa' },
-              { l: 'Spent',  v: '₹42k', c: '#f87171' },
-              { l: 'Saved',  v: '₹43k', c: '#a78bfa' },
-            ].map(k => (
-              <div key={k.l} className="rounded-xl p-2.5" style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <p className="text-[9px] mb-1" style={{ color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}>{k.l}</p>
-                <p className="text-xs font-bold" style={{ color: k.c }}>{k.v}</p>
-              </div>
-            ))}
-          </div>
-          <div className="rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <p className="text-[9px] mb-2" style={{ color: 'rgba(255,255,255,0.28)', letterSpacing: '0.04em' }}>This month</p>
-            <div className="flex items-end gap-[3px] h-8">
-              {BARS.map((h, i) => (
-                <div key={i} className="flex-1 rounded-[2px]" style={{ height: `${h}%`, background: i === BARS.length - 1 ? '#10b981' : `rgba(16,185,129,${0.15 + (h / 100) * 0.42})` }} />
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div
+      ref={mountRef}
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: 0, background: 'radial-gradient(ellipse 70% 55% at 50% 40%, rgba(16,185,129,0.05) 0%, transparent 65%), #030303' }}
+    />
+  )
+}
+
+/* ─────────────────── background drifting outline triangles ───────────── */
+
+function DriftTriangles() {
+  const tris = useRef(
+    Array.from({ length: 14 }, (_, i) => ({
+      left: `${(i * 71) % 100}%`,
+      top: `${(i * 37) % 100}%`,
+      size: 10 + (i % 4) * 9,
+      dur: 22 + (i % 5) * 8,
+      delay: -(i * 3.7),
+      gold: i % 5 === 0,
+    }))
+  ).current
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 1 }}>
+      {tris.map((t, i) => (
+        <svg key={i} width={t.size} height={t.size} viewBox="0 0 24 24" className="absolute animate-drift"
+          style={{ left: t.left, top: t.top, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s`, opacity: 0.05 }}>
+          <path d="M12 3 L21 20 L3 20 Z" fill="none" stroke={t.gold ? '#f59e0b' : '#10b981'} strokeWidth="1.4" />
+        </svg>
+      ))}
     </div>
   )
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+/* ───────────────────────────── copy stages ──────────────────────────── */
+
+function Stage({ align = 'left', kicker, title, children, innerRef }: {
+  align?: 'left' | 'right' | 'center'
+  kicker?: string
+  title: React.ReactNode
+  children?: React.ReactNode
+  innerRef?: React.Ref<HTMLDivElement>
+}) {
+  const alignCls = align === 'center'
+    ? 'items-center text-center'
+    : align === 'right' ? 'items-end text-right ml-auto' : 'items-start text-left'
+  return (
+    <section className="relative min-h-screen flex items-center px-6" style={{ zIndex: 2 }}>
+      <div ref={innerRef} className={`stage-copy max-w-6xl mx-auto w-full flex flex-col ${alignCls}`}>
+        <div className="max-w-md">
+          {kicker && <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#10b981' }}>{kicker}</p>}
+          <h2 className="font-black text-white mb-5" style={{ fontSize: 'clamp(30px, 4.5vw, 52px)', letterSpacing: '-0.025em', lineHeight: 1.08 }}>{title}</h2>
+          {children}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────── page ─────────────────────────────── */
+
 export default function LandingPage() {
-  const scrolled = useScrolled()
-  const statsEl  = useInView(0.4)
-  const toolsEl  = useInView(0.1)
-  const c1 = useCounter(8,   statsEl.inView)
-  const c2 = useCounter(100, statsEl.inView)
+  const progressRef = useRef(0)
+  const mainRef = useRef<HTMLDivElement>(null)
+  const [reduced, setReduced] = useState<boolean | null>(null)
 
-  const [booted, setBooted] = useState(false)
-  const heroRef    = useRef<HTMLDivElement>(null)
-  const mockWrapRef = useRef<HTMLDivElement>(null)
-  const glowRef    = useRef<HTMLDivElement>(null)
-  const amountRef  = useRef<HTMLParagraphElement>(null)
-  const heroCtaRef  = useMagnetic<HTMLAnchorElement>(0.28)
-  const finalCtaRef = useMagnetic<HTMLAnchorElement>(0.28)
-
-  // Boot fallback: if reduced motion, skip overlay immediately
   useEffect(() => {
-    if (reducedMotion()) setBooted(true)
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   }, [])
 
-  // ── Set every animated element's HIDDEN starting state before first paint.
-  // This runs unconditionally (not gated by `booted`) so nothing is ever
-  // visible-then-hidden-then-revealed — it's hidden from frame one, safely
-  // tucked behind the opaque boot overlay, and only the boot-gated effect
-  // below ever animates it back to visible.
-  useIsomorphicLayoutEffect(() => {
-    const reduced = reducedMotion()
-    if (!reduced) {
-      gsap.set('.hw', { opacity: 0, yPercent: 120, rotateX: -70 })
-      gsap.set('.sub-w', { opacity: 0, y: 14 })
-      gsap.set('.hero-badge', { opacity: 0, y: -10 })
-      gsap.set('.hero-cta', { opacity: 0, y: 16 })
-      gsap.set('.tool-card', { opacity: 0, y: 46, rotateX: -18, transformOrigin: '50% 100%' })
-      if (mockWrapRef.current) gsap.set(mockWrapRef.current, { opacity: 0, scale: 0.86, y: 40 })
-    } else {
-      gsap.set('.hw, .sub-w, .hero-badge, .hero-cta, .tool-card', { opacity: 1, y: 0, rotateX: 0, yPercent: 0 })
-      if (mockWrapRef.current) gsap.set(mockWrapRef.current, { opacity: 1, scale: 1, y: 0 })
-    }
-  }, [])
-
-  // ── Scroll-driven reveals that don't depend on the boot sequence at all:
-  // tool card batch reveal + the growth chart scrub. These can safely be
-  // wired up immediately since they only fire once actually scrolled to.
   useEffect(() => {
-    const reduced = reducedMotion()
-    const ctx = gsap.context(() => {
-      if (!reduced) {
-        ScrollTrigger.batch('.tool-card', {
-          start: 'top 88%',
-          once: true,
-          onEnter: batch => gsap.to(batch, { opacity: 1, y: 0, rotateX: 0, duration: 0.8, stagger: 0.08, ease: 'back.out(1.4)' }),
-        })
-        gsap.set('.growth-bar', { scaleY: 0 })
-        gsap.to('.growth-bar', {
-          scaleY: 1,
-          duration: 1,
-          ease: 'none',
-          stagger: 0.04,
-          scrollTrigger: { trigger: '.growth-chart', start: 'top 85%', end: 'top 45%', scrub: 0.6 },
-        })
-      } else {
-        gsap.set('.growth-bar', { scaleY: 1 })
-      }
-    })
-    return () => ctx.revert()
-  }, [])
+    if (reduced !== false) return
+    const lenis = new Lenis({ lerp: 0.1 })
+    function raf(time: number) { lenis.raf(time); requestAnimationFrame(raf) }
+    const id = requestAnimationFrame(raf)
+    lenis.on('scroll', ScrollTrigger.update)
 
-  // ── Hero reveal + ambient effects: only once the boot overlay is done.
-  useEffect(() => {
-    if (!booted) return
-    const reduced = reducedMotion()
-
-    const ctx = gsap.context(() => {
-      if (!reduced) {
-        const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-        tl.to('.hero-badge', { opacity: 1, y: 0, duration: 0.5 })
-          .to('.hw', { opacity: 1, yPercent: 0, rotateX: 0, duration: 0.85, stagger: 0.045, ease: 'back.out(1.6)' }, '-=0.25')
-          .to('.sub-w', { opacity: 1, y: 0, duration: 0.45, stagger: 0.012 }, '-=0.5')
-          .to('.hero-cta', { opacity: 1, y: 0, duration: 0.5 }, '-=0.25')
-        if (mockWrapRef.current) {
-          tl.to(mockWrapRef.current, { opacity: 1, scale: 1, y: 0, duration: 1.1, ease: 'elastic.out(1,0.75)' }, '-=0.55')
-        }
-        tl.add(() => {
-          if (!amountRef.current) return
-          const obj = { v: 0 }
-          gsap.to(obj, {
-            v: 240000,
-            duration: 1.1,
-            ease: 'power2.out',
-            onUpdate: () => { amountRef.current!.textContent = '₹' + Math.round(obj.v).toLocaleString('en-IN') },
-          })
-        }, '-=0.5')
-      }
-
-      // Marquee glitch pulse
-      if (!reduced) {
-        gsap.timeline({ repeat: -1, repeatDelay: 5 })
-          .to('.ticker-track', { filter: 'hue-rotate(50deg) saturate(2)', x: '+=6', duration: 0.08 })
-          .to('.ticker-track', { filter: 'hue-rotate(0deg) saturate(1)', x: '-=6', duration: 0.25 })
-      }
+    const st = ScrollTrigger.create({
+      trigger: mainRef.current,
+      start: 'top top',
+      end: 'bottom bottom',
+      scrub: true,
+      onUpdate: self => { progressRef.current = self.progress * 4 },
     })
 
-    // Hero pointer tilt (desktop only)
-    let removeTilt: (() => void) | undefined
-    if (!reduced && heroRef.current && mockWrapRef.current) {
-      const el = heroRef.current
-      const card = mockWrapRef.current
-      const rx = gsap.quickTo(card, 'rotateX', { duration: 0.6, ease: 'power3.out' })
-      const ry = gsap.quickTo(card, 'rotateY', { duration: 0.6, ease: 'power3.out' })
-      const glow = glowRef.current
-      const gx = glow ? gsap.quickTo(glow, 'x', { duration: 0.9, ease: 'power3.out' }) : null
-      const gy = glow ? gsap.quickTo(glow, 'y', { duration: 0.9, ease: 'power3.out' }) : null
-      const onMove = (e: PointerEvent) => {
-        const r = el.getBoundingClientRect()
-        const px = (e.clientX - r.left) / r.width - 0.5
-        const py = (e.clientY - r.top) / r.height - 0.5
-        ry(px * 16)
-        rx(-py * 12)
-        if (gx) gx(px * -50)
-        if (gy) gy(py * -36)
-      }
-      el.addEventListener('pointermove', onMove)
-      removeTilt = () => el.removeEventListener('pointermove', onMove)
-    }
-
-    // Lenis smooth scroll
-    let lenis: Lenis | undefined
-    let tickerFn: ((time: number) => void) | undefined
-    if (!reduced) {
-      lenis = new Lenis({ duration: 1.15, smoothWheel: true })
-      lenis.on('scroll', ScrollTrigger.update)
-      tickerFn = (time: number) => lenis?.raf(time * 1000)
-      gsap.ticker.add(tickerFn)
-      gsap.ticker.lagSmoothing(0)
-    }
+    const copies = gsap.utils.toArray<HTMLElement>('.stage-copy')
+    const copyTriggers = copies.map(el =>
+      gsap.fromTo(el, { opacity: 0, y: 42 }, {
+        opacity: 1, y: 0, ease: 'power2.out',
+        scrollTrigger: { trigger: el, start: 'top 78%', end: 'top 45%', scrub: true },
+      })
+    )
 
     return () => {
-      ctx.revert()
-      removeTilt?.()
-      if (tickerFn) gsap.ticker.remove(tickerFn)
-      lenis?.destroy()
+      cancelAnimationFrame(id)
+      lenis.destroy()
+      st.kill()
+      copyTriggers.forEach(t => { t.scrollTrigger?.kill(); t.kill() })
     }
-  }, [booted])
+  }, [reduced])
+
+  if (reduced === null) {
+    return <div className="min-h-screen" style={{ background: '#030303' }} />
+  }
 
   return (
-    <div style={{ background: '#040404', color: '#fff', overflowX: 'hidden' }}>
-      {!booted && <BootOverlay onDone={() => setBooted(true)} />}
+    <div ref={mainRef} className="relative" style={{ background: '#030303', color: '#fff' }}>
+      {!reduced && <ParticleField progressRef={progressRef} />}
+      {!reduced && <DriftTriangles />}
+      {reduced && (
+        <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0, background: 'radial-gradient(ellipse 70% 55% at 50% 35%, rgba(16,185,129,0.12) 0%, transparent 65%), #030303' }} />
+      )}
 
-      <header className="fixed top-0 inset-x-0 z-50 transition-all duration-300"
-        style={{ background: scrolled ? 'rgba(4,4,4,0.85)' : 'transparent', backdropFilter: scrolled ? 'blur(18px)' : 'none', borderBottom: scrolled ? '1px solid rgba(255,255,255,0.07)' : '1px solid transparent' }}>
-        <div className="max-w-6xl mx-auto px-6 h-[58px] flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <Logo size={26} />
-            <span className="text-sm font-semibold tracking-wide transition-opacity duration-150 group-hover:opacity-70" style={{ color: 'rgba(255,255,255,0.85)' }}>Ekam Finance</span>
+      {/* Nav */}
+      <header className="fixed top-0 inset-x-0 px-6 py-4" style={{ zIndex: 10 }}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between rounded-2xl px-4 py-2.5"
+          style={{ background: 'rgba(8,8,8,0.55)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <Link href="/" className="flex items-center gap-2.5">
+            <Logo size={24} />
+            <span className="text-sm font-bold tracking-tight">ekam</span>
           </Link>
-          <nav className="flex items-center gap-1">
-            <Link href="/login" className="text-sm px-4 py-1.5 rounded-lg transition-all duration-150 hover:bg-white/6" style={{ color: 'rgba(255,255,255,0.40)' }}>Sign in</Link>
-            <Link href="/signup" className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25 hover:bg-emerald-400" style={{ background: '#10b981', color: '#000' }}>Get started</Link>
+          <nav className="flex items-center gap-5">
+            <Link href="/login" className="text-sm transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.45)' }}>Sign in</Link>
+            <Link href="/signup" className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25"
+              style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
+              Get started
+            </Link>
           </nav>
         </div>
       </header>
 
-      <section ref={heroRef} className="relative min-h-screen grid-bg flex items-center px-6 pt-20 pb-16" style={{ perspective: '1300px' }}>
-        <div ref={glowRef} className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(16,185,129,0.08) 0%, transparent 65%)' }} />
-        <AmbientRupees />
-        <div className="max-w-6xl mx-auto w-full relative z-10">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
-            <div>
-              <div className="hero-badge inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-8" style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)', color: '#6ee7b7' }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                Made in India
-              </div>
-              <h1 className="font-black leading-none mb-6" style={{ fontSize: 'clamp(48px, 6.5vw, 80px)', letterSpacing: '-0.03em' }}>
-                <Word>One</Word> <Word>app</Word> <Word>for</Word><br />
-                <Word gradient>every</Word> <Word gradient>rupee.</Word>
-              </h1>
-              <p className="text-lg mb-3 leading-relaxed" style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}>
-                <Words text="You know when your salary hits and by the 20th you have no idea where it went?" />
-              </p>
-              <p className="text-lg mb-10 font-medium" style={{ color: 'rgba(255,255,255,0.70)', maxWidth: '420px' }}>
-                <Words text="That is what Ekam solves." />
-              </p>
-              <div className="hero-cta flex items-center gap-3">
-                <Link ref={heroCtaRef} href="/signup" className="flex items-center gap-1.5 text-sm font-bold px-6 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/30 hover:bg-emerald-400" style={{ background: '#10b981', color: '#000' }}>
-                  Start free <ArrowUpRight className="w-4 h-4" />
-                </Link>
-                <Link href="/login" className="text-sm px-6 py-2.5 rounded-xl transition-all duration-150 hover:bg-white/6" style={{ color: 'rgba(255,255,255,0.38)', border: '1px solid rgba(255,255,255,0.09)' }}>Sign in</Link>
-              </div>
-              <p className="text-xs mt-6" style={{ color: 'rgba(255,255,255,0.22)' }}>Free. No card required. No ads.</p>
+      {/* Stage 0 — chaos */}
+      <section className="relative min-h-screen flex items-center px-6" style={{ zIndex: 2 }}>
+        <div className="stage-copy max-w-6xl mx-auto w-full">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-8"
+              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)', color: '#6ee7b7' }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Made in India
             </div>
-            <div ref={mockWrapRef} className="flex justify-center lg:justify-end" style={{ transformStyle: 'preserve-3d' }}>
-              <MockCard amountRef={amountRef} />
+            <h1 className="font-black leading-none mb-6" style={{ fontSize: 'clamp(44px, 6.5vw, 80px)', letterSpacing: '-0.03em' }}>
+              One app for<br />
+              <span style={{ background: 'linear-gradient(100deg, #10b981 10%, #f59e0b 90%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>every rupee.</span>
+            </h1>
+            <p className="text-lg mb-3 leading-relaxed" style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}>
+              You know when your salary hits and by the 20th you have no idea where it went?
+            </p>
+            <p className="text-lg mb-10 font-medium" style={{ color: 'rgba(255,255,255,0.72)', maxWidth: '420px' }}>
+              That is what Ekam solves.
+            </p>
+            <div className="flex items-center gap-3">
+              <Link href="/signup" className="flex items-center gap-1.5 text-sm font-bold px-6 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/30"
+                style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
+                Start free <ArrowUpRight className="w-4 h-4" />
+              </Link>
+              <Link href="/login" className="text-sm px-6 py-2.5 rounded-xl transition-all duration-150 hover:bg-white/5"
+                style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                Sign in
+              </Link>
             </div>
+            <p className="text-xs mt-6" style={{ color: 'rgba(255,255,255,0.22)' }}>Free. No card required. No ads.</p>
           </div>
+        </div>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+          <span className="text-[10px] uppercase tracking-[0.2em] font-semibold">Scroll</span>
+          <div className="w-px h-8 animate-pulse" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.3), transparent)' }} />
         </div>
       </section>
 
-      <div className="marquee-wrap overflow-hidden py-3.5" style={{ borderTop: '1px solid rgba(255,255,255,0.055)', borderBottom: '1px solid rgba(255,255,255,0.055)', background: 'rgba(255,255,255,0.015)' }}>
-        <div className="ticker-track flex gap-9 animate-marquee whitespace-nowrap select-none">
-          {TICKER.map((t, i) => (
-            <span key={i} className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-[0.11em]" style={{ color: 'rgba(255,255,255,0.22)' }}>
-              <span className="w-1 h-1 rounded-full" style={{ background: '#10b981' }} />{t}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <section className="py-28 px-6" style={{ background: '#060606' }} ref={toolsEl.ref}>
-        <div className="max-w-5xl mx-auto">
-          <Reveal className="mb-16">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#10b981' }}>What it does</p>
-            <h2 className="font-black text-white" style={{ fontSize: 'clamp(32px, 4.5vw, 52px)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>Eight tools.<br />One tab.</h2>
-          </Reveal>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3" style={{ perspective: '1000px' }}>
-            {TOOLS.map((tool) => {
-              const Icon = tool.icon
-              return (
-                <TiltCard key={tool.label} className="tool-card surface-dark rounded-2xl p-5">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-4" style={{ background: 'rgba(16,185,129,0.09)', color: '#34d399' }}><Icon className="w-4 h-4" /></div>
-                  <p className="text-sm font-semibold text-white mb-1">{tool.label}</p>
-                  <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.36)' }}>{tool.note}</p>
-                </TiltCard>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 px-6" style={{ background: '#fff' }} ref={statsEl.ref}>
-        <div className="max-w-5xl mx-auto grid md:grid-cols-2 gap-12 items-center">
-          <Reveal>
-            <p className="text-xs font-semibold uppercase tracking-widest text-emerald-600 mb-4">Built for India</p>
-            <h2 className="font-black text-gray-900 mb-5" style={{ fontSize: 'clamp(28px, 4vw, 44px)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>
-              INR first.<br />April tax year.<br />Kolkata timezone.
-            </h2>
-            <p className="text-base text-gray-500 leading-relaxed">Not a US app retrofitted for India. Every default was chosen for how Indians actually manage money.</p>
-            <div className="growth-chart mt-8">
-              <p className="text-[11px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'rgba(0,0,0,0.3)' }}>Illustrative growth</p>
-              <div className="flex items-end gap-[3px] h-16">
-                {GROWTH_BARS.map((h, i) => (
-                  <div key={i} className="growth-bar flex-1 rounded-t-[2px]" style={{ height: `${h}%`, transformOrigin: 'bottom', background: i === GROWTH_BARS.length - 1 ? '#10b981' : `rgba(16,185,129,${0.22 + (h / 100) * 0.55})` }} />
-                ))}
-              </div>
-            </div>
-          </Reveal>
-          <Reveal>
-            <div className="grid grid-cols-2 gap-5">
-              {[
-                { n: c1, s: '', l: 'Finance modules' },
-                { n: c2, s: '%', l: 'Data ownership' },
-              ].map(s => (
-                <div key={s.l} className="text-center p-6 rounded-2xl" style={{ background: '#f9fafb', border: '1px solid #f0f0f0' }}>
-                  <p className="text-5xl font-black text-gray-900 tabular-nums tracking-tight">{s.n}{s.s}</p>
-                  <p className="text-sm text-gray-400 mt-2 font-medium">{s.l}</p>
+      {/* Stage 1 — ₹ : every rupee tracked */}
+      <Stage align="right" kicker="What it does" title={<>Eight tools.<br />One tab.</>}>
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-2">
+          {TOOLS.map(t => {
+            const Icon = t.icon
+            return (
+              <div key={t.label} className="flex items-start gap-2.5 text-left">
+                <span className="mt-0.5 w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: 'rgba(16,185,129,0.1)', color: '#34d399' }}>
+                  <Icon className="w-3 h-3" />
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-white leading-tight">{t.label}</p>
+                  <p className="text-[11px] leading-snug" style={{ color: 'rgba(255,255,255,0.35)' }}>{t.note}</p>
                 </div>
-              ))}
-              <div className="col-span-2 text-center p-5 rounded-2xl" style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                <p className="text-2xl font-black text-emerald-700">Free forever</p>
-                <p className="text-sm text-emerald-600 mt-1">No credit card, no subscriptions</p>
               </div>
-            </div>
-          </Reveal>
+            )
+          })}
         </div>
-      </section>
+      </Stage>
 
-      <section className="py-32 px-6 grid-bg text-center" style={{ background: '#060606' }}>
-        <Reveal className="max-w-xl mx-auto">
-          <div className="flex justify-center mb-8">
-            <div className="relative">
-              <div className="absolute inset-0 scale-[2.5] rounded-full animate-breathe" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.18) 0%, transparent 70%)' }} />
-              <Logo size={52} />
-            </div>
-          </div>
-          <h2 className="font-black text-white mb-4" style={{ fontSize: 'clamp(36px, 5vw, 56px)', letterSpacing: '-0.025em', lineHeight: 1.1 }}>Start knowing where your money goes.</h2>
-          <p className="mb-10 text-lg" style={{ color: 'rgba(255,255,255,0.32)' }}>Takes two minutes to set up.</p>
-          <Link ref={finalCtaRef} href="/signup" className="inline-flex items-center gap-2 font-bold px-9 py-3.5 rounded-xl text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-emerald-500/30 hover:bg-emerald-400" style={{ background: '#10b981', color: '#000' }}>
+      {/* Stage 2 — arrow : growth */}
+      <Stage align="left" kicker="Built for India" title={<>INR first.<br />April tax year.<br />Kolkata timezone.</>}>
+        <p className="text-base leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          Not a US app retrofitted for India. Every default was chosen for how Indians actually manage money.
+        </p>
+      </Stage>
+
+      {/* Stage 3 — wallet : everything handled */}
+      <Stage align="right" kicker="Yours, always" title={<>Budgets, bills,<br />goals — handled.</>}>
+        <p className="text-base leading-relaxed mb-6" style={{ color: 'rgba(255,255,255,0.45)' }}>
+          Set monthly limits, never miss a payment, and save toward what matters — all in one place.
+        </p>
+        <div className="inline-flex flex-col gap-1 px-5 py-4 rounded-2xl text-left"
+          style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.18)' }}>
+          <p className="text-xl font-black" style={{ color: '#34d399' }}>Free forever</p>
+          <p className="text-sm" style={{ color: 'rgba(110,231,183,0.7)' }}>No credit card, no subscriptions</p>
+        </div>
+      </Stage>
+
+      {/* Stage 4 — logo : CTA */}
+      <section className="relative min-h-screen flex items-center justify-center px-6 text-center" style={{ zIndex: 2 }}>
+        <div className="stage-copy max-w-xl mx-auto">
+          <h2 className="font-black text-white mb-4" style={{ fontSize: 'clamp(34px, 5vw, 56px)', letterSpacing: '-0.025em', lineHeight: 1.1 }}>
+            Start knowing where your money goes.
+          </h2>
+          <p className="mb-10 text-lg" style={{ color: 'rgba(255,255,255,0.35)' }}>Takes two minutes to set up.</p>
+          <Link href="/signup" className="inline-flex items-center gap-2 font-bold px-9 py-3.5 rounded-xl text-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xl hover:shadow-emerald-500/30"
+            style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
             Create free account <ArrowUpRight className="w-4 h-4" />
           </Link>
-        </Reveal>
+        </div>
       </section>
 
-      <footer className="px-6 py-10" style={{ background: '#000', borderTop: '1px solid rgba(255,255,255,0.055)' }}>
+      {/* Footer */}
+      <footer className="relative px-6 py-10" style={{ zIndex: 2, background: 'rgba(0,0,0,0.6)', borderTop: '1px solid rgba(255,255,255,0.055)', backdropFilter: 'blur(8px)' }}>
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
           <Link href="/" className="flex items-center gap-2.5">
             <Logo size={20} />
@@ -639,17 +582,13 @@ export default function LandingPage() {
               style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}>
               Smit Bharat Patil
             </a>
-            {' '}under the guidance of{' '}
-            <a href="https://www.linkedin.com/in/pakshal-tated-706155318/" target="_blank" rel="noopener noreferrer"
-              className="font-semibold transition-colors duration-150 hover:text-emerald-400 underline underline-offset-2"
-              style={{ color: 'rgba(255,255,255,0.65)', textDecorationColor: 'rgba(255,255,255,0.18)' }}>
-              Pakshal Tated
-            </a>
           </p>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.18)' }}>© 2026 Ekam Finance</p>
+          <div className="flex items-center gap-5 text-sm" style={{ color: 'rgba(255,255,255,0.28)' }}>
+            <Link href="/login" className="transition-colors hover:text-white">Sign in</Link>
+            <Link href="/signup" className="transition-colors hover:text-white">Sign up</Link>
+          </div>
         </div>
       </footer>
-
     </div>
   )
 }

@@ -52,7 +52,7 @@
 .surface-light { background: #fff; border: 1px solid rgba(0,0,0,0.07); transition: transform 0.2s, box-shadow 0.2s; }
 .surface-light:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(0,0,0,0.09); }
 
-/* ── Dashboard dark theme (.dk wrapper) ──────────────────────────────────── */
+/* ── Dashboard dark theme (.dk wrapper) ──────────────────────────── */
 .dk { color: rgba(255,255,255,0.88); }
 
 .dk .text-gray-900 { color: rgba(255,255,255,0.92) !important; }
@@ -105,7 +105,7 @@
 /* Text contrast on colored card icon backgrounds (e.g. category swatches) */
 .dk .text-gray-600.leading-tight { color: rgba(255,255,255,0.78) !important; }
 
-/* ── Global liveliness layer ─────────────────────────────────────────────── */
+/* ── Global liveliness layer ─────────────────────────────────────── */
 @keyframes scaleIn { from { opacity: 0; transform: scale(0.94) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
 @keyframes spinSlow { to { transform: rotate(360deg); } }
 
@@ -135,3 +135,13 @@
   transition: opacity 0.3s;
 }
 .marquee-wrap:hover .animate-marquee { animation-play-state: paused; }
+
+/* ── Landing: drifting outline triangles ─────────────────────────────── */
+@keyframes drift {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  25%  { transform: translate(28px, -42px) rotate(90deg); }
+  50%  { transform: translate(-16px, -84px) rotate(180deg); }
+  75%  { transform: translate(-38px, -38px) rotate(270deg); }
+  100% { transform: translate(0, 0) rotate(360deg); }
+}
+.animate-drift { animation: drift linear infinite; }
