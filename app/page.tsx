@@ -450,13 +450,13 @@ function Stage({ align = 'left', kicker, title, children, innerRef }: {
 }) {
   const alignCls = align === 'center'
     ? 'items-center text-center'
-    : align === 'right' ? 'items-end text-right ml-auto' : 'items-start text-left'
+    : align === 'right' ? 'items-start text-left sm:items-end sm:text-right sm:ml-auto' : 'items-start text-left'
   return (
-    <section className="relative min-h-screen flex items-center px-6" style={{ zIndex: 2 }}>
+    <section className="relative min-h-screen flex items-center px-6 py-20" style={{ zIndex: 2 }}>
       <div ref={innerRef} className={`stage-copy max-w-6xl mx-auto w-full flex flex-col ${alignCls}`} style={{ textShadow: '0 2px 24px rgba(0,0,0,0.85)' }}>
-        <div className="max-w-md">
+        <div className="max-w-md w-full">
           {kicker && <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#10b981' }}>{kicker}</p>}
-          <h2 className="font-black text-white mb-5" style={{ fontSize: 'clamp(30px, 4.5vw, 52px)', letterSpacing: '-0.025em', lineHeight: 1.08 }}>{title}</h2>
+          <h2 className="font-black text-white mb-5" style={{ fontSize: 'clamp(28px, 8vw, 52px)', letterSpacing: '-0.025em', lineHeight: 1.08 }}>{title}</h2>
           {children}
         </div>
       </div>
@@ -520,18 +520,18 @@ export default function LandingPage() {
       )}
 
       {/* Nav */}
-      <header className="fixed top-0 inset-x-0 px-6 py-4" style={{ zIndex: 10 }}>
-        <div className="max-w-6xl mx-auto flex items-center justify-between rounded-2xl px-4 py-2.5"
+      <header className="fixed top-0 inset-x-0 px-3 sm:px-6 py-3 sm:py-4" style={{ zIndex: 10 }}>
+        <div className="max-w-6xl mx-auto flex items-center justify-between rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5"
           style={{ background: 'rgba(8,8,8,0.55)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.07)' }}>
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden">
-              <Logo size={22} />
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5">
+            <span className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white flex items-center justify-center overflow-hidden flex-shrink-0">
+              <Logo size={20} />
             </span>
             <span className="text-sm font-bold tracking-tight">ekam</span>
           </Link>
-          <nav className="flex items-center gap-5">
-            <Link href="/login" className="text-sm transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.45)' }}>Sign in</Link>
-            <Link href="/signup" className="text-sm font-semibold px-4 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25"
+          <nav className="flex items-center gap-3 sm:gap-5">
+            <Link href="/login" className="text-xs sm:text-sm transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.45)' }}>Sign in</Link>
+            <Link href="/signup" className="text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25 whitespace-nowrap"
               style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
               Get started
             </Link>
@@ -540,7 +540,7 @@ export default function LandingPage() {
       </header>
 
       {/* Stage 0 — chaos */}
-      <section className="relative min-h-screen flex items-center px-6" style={{ zIndex: 2 }}>
+      <section className="relative min-h-screen flex items-center px-5 sm:px-6" style={{ zIndex: 2 }}>
         <div className="stage-copy max-w-6xl mx-auto w-full">
           <div className="max-w-xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-8"
@@ -548,17 +548,17 @@ export default function LandingPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               Made in India
             </div>
-            <h1 className="font-black leading-none mb-6" style={{ fontSize: 'clamp(44px, 6.5vw, 80px)', letterSpacing: '-0.03em' }}>
+            <h1 className="font-black leading-none mb-6" style={{ fontSize: 'clamp(36px, 10vw, 80px)', letterSpacing: '-0.03em' }}>
               One app for<br />
               <span style={{ background: 'linear-gradient(100deg, #10b981 10%, #f59e0b 90%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>every rupee.</span>
             </h1>
-            <p className="text-lg mb-3 leading-relaxed" style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}>
+            <p className="text-base sm:text-lg mb-3 leading-relaxed" style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}>
               You know when your salary hits and by the 20th you have no idea where it went?
             </p>
-            <p className="text-lg mb-10 font-medium" style={{ color: 'rgba(255,255,255,0.72)', maxWidth: '420px' }}>
+            <p className="text-base sm:text-lg mb-10 font-medium" style={{ color: 'rgba(255,255,255,0.72)', maxWidth: '420px' }}>
               That is what Ekam solves.
             </p>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <Link href="/signup" className="flex items-center gap-1.5 text-sm font-bold px-6 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/30"
                 style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
                 Start free <ArrowUpRight className="w-4 h-4" />
@@ -582,7 +582,7 @@ export default function LandingPage() {
         <p className="text-base leading-relaxed mb-5" style={{ color: 'rgba(255,255,255,0.45)' }}>
           Everything your money touches, tracked in one place. No tab hopping, no spreadsheets.
         </p>
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 mt-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 mt-2">
           {TOOLS.map(t => {
             const Icon = t.icon
             return (
