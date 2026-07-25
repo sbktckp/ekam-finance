@@ -273,8 +273,10 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
     const isMobile = window.matchMedia('(max-width: 768px)').matches
     const COUNT = isMobile ? 3500 : 12000
 
+    const DPR = Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2)
+
     renderer.setClearColor(0x000000, 0)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setPixelRatio(DPR)
     renderer.setSize(window.innerWidth, window.innerHeight)
     mount.appendChild(renderer.domElement)
 
@@ -308,7 +310,7 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
         uTime:       { value: 0 },
         uMouse:      { value: new THREE.Vector2(10, 10) },
         uMouseOn:    { value: isMobile ? 0 : 1 },
-        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        uPixelRatio: { value: DPR },
         uShift:      { value: new THREE.Vector2(0, 0) },
       },
     })
@@ -323,7 +325,13 @@ function ParticleField({ progressRef }: { progressRef: React.MutableRefObject<nu
     }
     if (!isMobile) window.addEventListener('pointermove', onMove, { passive: true })
 
+    // On mobile, showing/hiding the URL bar fires resize with an unchanged
+    // width. Re-sizing the canvas there causes a visible hitch mid-scroll,
+    // so only react when the width actually changes.
+    let lastW = window.innerWidth
     function onResize() {
+      if (isMobile && window.innerWidth === lastW) return
+      lastW = window.innerWidth
       camera.aspect = window.innerWidth / window.innerHeight
       camera.updateProjectionMatrix()
       renderer.setSize(window.innerWidth, window.innerHeight)
@@ -417,6 +425,10 @@ function StageRail({ progressRef }: { progressRef: React.MutableRefObject<number
 /* ─────────────────── background drifting outline triangles ───────────── */
 
 function DriftTriangles() {
+  const [count, setCount] = useState(14)
+  useEffect(() => {
+    setCount(window.matchMedia('(max-width: 768px)').matches ? 7 : 14)
+  }, [])
   const tris = useRef(
     Array.from({ length: 14 }, (_, i) => ({
       left: `${(i * 71) % 100}%`,
@@ -429,7 +441,7 @@ function DriftTriangles() {
   ).current
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 1 }}>
-      {tris.map((t, i) => (
+      {tris.slice(0, count).map((t, i) => (
         <svg key={i} width={t.size} height={t.size} viewBox="0 0 24 24" className="absolute animate-drift"
           style={{ left: t.left, top: t.top, animationDuration: `${t.dur}s`, animationDelay: `${t.delay}s`, opacity: 0.05 }}>
           <path d="M12 3 L21 20 L3 20 Z" fill="none" stroke={t.gold ? '#f59e0b' : '#10b981'} strokeWidth="1.4" />
@@ -452,7 +464,7 @@ function Stage({ align = 'left', kicker, title, children, innerRef }: {
     ? 'items-center text-center'
     : align === 'right' ? 'items-start text-left sm:items-end sm:text-right sm:ml-auto' : 'items-start text-left'
   return (
-    <section className="relative min-h-screen flex items-center px-6 py-20" style={{ zIndex: 2 }}>
+    <section className="relative min-h-[100svh] flex items-center px-5 sm:px-6 py-24 sm:py-20" style={{ zIndex: 2 }}>
       <div ref={innerRef} className={`stage-copy max-w-6xl mx-auto w-full flex flex-col ${alignCls}`} style={{ textShadow: '0 2px 24px rgba(0,0,0,0.85)' }}>
         <div className="max-w-md w-full">
           {kicker && <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#10b981' }}>{kicker}</p>}
@@ -482,6 +494,10 @@ export default function LandingPage() {
     const id = requestAnimationFrame(raf)
     lenis.on('scroll', ScrollTrigger.update)
 
+    // URL-bar show/hide on mobile fires a resize that would otherwise make
+    // ScrollTrigger recalculate and snap the scrub position.
+    ScrollTrigger.config({ ignoreMobileResize: true })
+
     const st = ScrollTrigger.create({
       trigger: mainRef.current,
       start: 'top top',
@@ -507,7 +523,7 @@ export default function LandingPage() {
   }, [reduced])
 
   if (reduced === null) {
-    return <div className="min-h-screen" style={{ background: '#030303' }} />
+    return <div className="min-h-[100svh]" style={{ background: '#030303' }} />
   }
 
   return (
@@ -530,8 +546,8 @@ export default function LandingPage() {
             <span className="text-sm font-bold tracking-tight">ekam</span>
           </Link>
           <nav className="flex items-center gap-3 sm:gap-5">
-            <Link href="/login" className="text-xs sm:text-sm transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.45)' }}>Sign in</Link>
-            <Link href="/signup" className="text-xs sm:text-sm font-semibold px-3 sm:px-4 py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25 whitespace-nowrap"
+            <Link href="/login" className="text-xs sm:text-sm py-2 -my-2 transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.45)' }}>Sign in</Link>
+            <Link href="/signup" className="text-xs sm:text-sm font-semibold px-3.5 sm:px-4 py-2.5 sm:py-1.5 rounded-lg transition-all duration-200 hover:-translate-y-px hover:shadow-lg hover:shadow-emerald-500/25 whitespace-nowrap"
               style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
               Get started
             </Link>
@@ -540,30 +556,30 @@ export default function LandingPage() {
       </header>
 
       {/* Stage 0 — chaos */}
-      <section className="relative min-h-screen flex items-center px-5 sm:px-6" style={{ zIndex: 2 }}>
+      <section className="relative min-h-[100svh] flex items-center px-5 sm:px-6" style={{ zIndex: 2 }}>
         <div className="stage-copy max-w-6xl mx-auto w-full">
           <div className="max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-8"
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-6 sm:mb-8"
               style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.22)', color: '#6ee7b7' }}>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               Made in India
             </div>
-            <h1 className="font-black leading-none mb-6" style={{ fontSize: 'clamp(36px, 10vw, 80px)', letterSpacing: '-0.03em' }}>
+            <h1 className="font-black leading-none mb-5 sm:mb-6" style={{ fontSize: 'clamp(36px, 10vw, 80px)', letterSpacing: '-0.03em' }}>
               One app for<br />
               <span style={{ background: 'linear-gradient(100deg, #10b981 10%, #f59e0b 90%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>every rupee.</span>
             </h1>
             <p className="text-base sm:text-lg mb-3 leading-relaxed" style={{ color: 'rgba(255,255,255,0.42)', maxWidth: '420px' }}>
               You know when your salary hits and by the 20th you have no idea where it went?
             </p>
-            <p className="text-base sm:text-lg mb-10 font-medium" style={{ color: 'rgba(255,255,255,0.72)', maxWidth: '420px' }}>
+            <p className="text-base sm:text-lg mb-8 sm:mb-10 font-medium" style={{ color: 'rgba(255,255,255,0.72)', maxWidth: '420px' }}>
               That is what Ekam solves.
             </p>
             <div className="flex items-center gap-3 flex-wrap">
-              <Link href="/signup" className="flex items-center gap-1.5 text-sm font-bold px-6 py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/30"
+              <Link href="/signup" className="flex items-center justify-center gap-1.5 text-sm font-bold px-6 py-3 sm:py-2.5 rounded-xl transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-emerald-500/30"
                 style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#000' }}>
                 Start free <ArrowUpRight className="w-4 h-4" />
               </Link>
-              <Link href="/login" className="text-sm px-6 py-2.5 rounded-xl transition-all duration-150 hover:bg-white/5"
+              <Link href="/login" className="text-sm text-center px-6 py-3 sm:py-2.5 rounded-xl transition-all duration-150 hover:bg-white/5"
                 style={{ color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.1)' }}>
                 Sign in
               </Link>
@@ -571,7 +587,7 @@ export default function LandingPage() {
             <p className="text-xs mt-6" style={{ color: 'rgba(255,255,255,0.22)' }}>Free. No card required. No ads.</p>
           </div>
         </div>
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 hidden min-[400px]:flex flex-col items-center gap-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
           <span className="text-[10px] uppercase tracking-[0.2em] font-semibold">Scroll</span>
           <div className="w-px h-8 animate-pulse" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.3), transparent)' }} />
         </div>
@@ -629,9 +645,9 @@ export default function LandingPage() {
       </Stage>
 
       {/* Stage 4 — logo : CTA */}
-      <section className="relative min-h-screen flex items-center justify-center px-6 text-center" style={{ zIndex: 2 }}>
+      <section className="relative min-h-[100svh] flex items-center justify-center px-5 sm:px-6 text-center" style={{ zIndex: 2 }}>
         <div className="stage-copy max-w-xl mx-auto">
-          <h2 className="font-black text-white mb-4" style={{ fontSize: 'clamp(34px, 5vw, 56px)', letterSpacing: '-0.025em', lineHeight: 1.1 }}>
+          <h2 className="font-black text-white mb-4" style={{ fontSize: 'clamp(30px, 8vw, 56px)', letterSpacing: '-0.025em', lineHeight: 1.1 }}>
             Start knowing where your money goes.
           </h2>
           <p className="mb-10 text-lg" style={{ color: 'rgba(255,255,255,0.35)' }}>Takes two minutes to set up.</p>
