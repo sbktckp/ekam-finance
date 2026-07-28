@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://github-readme-stats.vercel.app/api/pin/?username=sbktckp&repo=ekam-finance&theme=default&hide_border=true" alt="repo card" />
+  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=sbktckp&repo=ekam-finance&layout=pie&theme=default&hide_border=true" alt="language breakdown" />
 </p>
 
 ---
