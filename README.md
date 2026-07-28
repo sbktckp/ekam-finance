@@ -1,6 +1,6 @@
 <h1 align="center">एकम्</h1>
 <h3 align="center">EKAM FINANCE</h3>
-<p align="center"><i>"The One."</i> — one place for every rupee: budgets, bills, goals, and investments, built for how Indians actually manage money.</p>
+<p align="center"><i>"The One."</i> One place for every rupee: budgets, bills, goals, and investments, built for how Indians actually manage money.</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=nextdotjs&logoColor=white" />
@@ -10,13 +10,17 @@
   <img src="https://img.shields.io/badge/Deployed_on-Vercel-000000?style=flat-square&logo=vercel&logoColor=white" />
 </p>
 
+<p align="center">
+  <img src="https://github-readme-stats.vercel.app/api/pin/?username=sbktckp&repo=ekam-finance&theme=default&hide_border=true" alt="repo card" />
+</p>
+
 ---
 
 ### THE PREMISE
 
-Most budgeting apps are American software with a rupee symbol swapped in. Ekam Finance isn't that. It's built INR-first, for the way money actually moves for an Indian household — transactions, budgets, bills, goals, and investments, all reporting to one dial instead of five disconnected apps.
+Most budgeting apps are American software with a rupee symbol swapped in. Ekam Finance isn't that. It's built INR first, for the way money actually moves in an Indian household: transactions, budgets, bills, goals, and investments, all reporting to one dial instead of five disconnected apps.
 
-एकम् — *ekam*, "the one" — is the idea in one word: everything your money does, converging on a single, honest number.
+एकम्, *ekam*, "the one," is the idea in one word. Everything your money does, converging on a single, honest number.
 
 ```mermaid
 flowchart LR
@@ -35,7 +39,7 @@ flowchart LR
 | Module | What it does |
 |---|---|
 | **Dashboard** | Net worth, spend trends, and account balances, at a glance |
-| **Transactions** | Categorized income/expense tracking with stable, predictable sort ordering |
+| **Transactions** | Categorized income and expense tracking with stable, predictable sort ordering |
 | **Accounts** | Multi-account support (bank, cash, wallet) with server-side balance guards |
 | **Budgets** | Category-wise monthly budgets with live progress tracking |
 | **Goals** | Savings goals with target dates and contribution tracking |
@@ -47,12 +51,15 @@ flowchart LR
 
 ### HOW IT STAYS HONEST
 
-The dial only means something if the number underneath it can be trusted. A few decisions exist specifically for that:
+The dial only means something if the number underneath it can be trusted. A few decisions exist specifically for that.
 
-- **Data integrity is enforced below the UI** — mandatory fields, server-side balance guards, and stable sort ordering live at the database and server-action layer, not just on-screen validation that a client could skip.
-- **`.maybeSingle()` over `.single()`** on Supabase queries — a zero-row result is a normal outcome here, not an exception to throw.
-- **Partial unique indexes** close the gap where Postgres's default uniqueness behavior would otherwise let NULL-backed duplicates slip through.
-- **Route groups** — `(auth)` and `(dashboard)` — keep authenticated and public flows cleanly separated at the App Router level, so there's no ambiguity about what needs a session.
+Data integrity is enforced below the UI. Mandatory fields, server-side balance guards, and stable sort ordering live at the database and server-action layer, not just on-screen validation a client could skip.
+
+Supabase queries use `.maybeSingle()` over `.single()`, since a zero-row result is a normal outcome here, not an exception to throw.
+
+Partial unique indexes close the gap where Postgres's default uniqueness behavior would otherwise let NULL-backed duplicates slip through.
+
+Route groups, `(auth)` and `(dashboard)`, keep authenticated and public flows cleanly separated at the App Router level, so there's no ambiguity about what needs a session.
 
 ---
 
@@ -86,7 +93,7 @@ middleware.ts            # Session/auth middleware
 
 - **Framework:** Next.js 15 (App Router, Server Components by default)
 - **Language:** TypeScript, strict mode
-- **Backend:** Supabase — PostgreSQL, Auth, and Row-Level Security
+- **Backend:** Supabase, PostgreSQL, Auth, and Row-Level Security
 - **Styling:** Tailwind CSS v3
 - **State:** Zustand
 - **Validation:** Zod
