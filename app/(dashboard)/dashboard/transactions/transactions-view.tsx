@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { gsap } from 'gsap'
 import { Plus, Pencil, Trash2, X, AlertTriangle, SlidersHorizontal, StickyNote } from 'lucide-react'
 import { deleteTransaction, updateTransaction } from '@/app/actions/transactions'
 import { AddTransactionModal } from '@/components/modals/add-transaction-modal'
 import { AddAccountModal }     from '@/components/modals/add-account-modal'
 import { formatCurrency, cn }  from '@/lib/utils'
+import { PageHero } from '@/components/shared/page-hero'
 
 type Account  = { id: string; name: string; color: string; type: string; currency: string; balance: number }
 type Category = { id: string; name: string; icon: string; color: string; type: string }
@@ -17,6 +19,9 @@ type Txn      = {
 }
 
 const DARK = { bg: '#1c1c1e', border: 'rgba(255,255,255,0.10)', input: 'rgba(255,255,255,0.07)', inputBorder: 'rgba(255,255,255,0.13)', text: 'rgba(255,255,255,0.88)', label: 'rgba(255,255,255,0.38)' }
+
+/** Panel tokens shared by the filter bar and the ledger, matching accounts. */
+const PANEL = { bg: '#0d1017', border: 'rgba(148,163,184,0.13)', divider: 'rgba(148,163,184,0.07)', muted: 'rgba(148,163,184,0.75)' }
 
 // ─── Edit modal (income + expense) ─────────────────────────────────────────────
 function EditModal({ txn, categories, open, onClose, onSuccess }: {
@@ -144,6 +149,7 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
   const [editTxn, setEditTxn]  = useState<Txn | null>(null)
   const [delTxn,  setDelTxn]   = useState<Txn | null>(null)
   const [isDeleting, startDel] = useTransition()
+  const ledgerRef = useRef<HTMLDivElement>(null)
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const [showFilters,  setShowFilters]  = useState(false)
@@ -172,6 +178,17 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
     return true
   }), [transactions, fType, fCategoryId, fMonth, fAmountMin, fAmountMax])
 
+  // Totals reflect the current filter, so the hero always describes what you see.
+  const totals = useMemo(() => {
+    let income = 0, expense = 0
+    filtered.forEach(t => {
+      const v = Number(t.amount_in_base)
+      if (t.type === 'income') income += v
+      else if (t.type === 'expense') expense += v
+    })
+    return { income, expense, net: income - expense }
+  }, [filtered])
+
   const activeFilters = [fType !== 'all', !!fCategoryId, !!fMonth, !!fAmountMin, !!fAmountMax].filter(Boolean).length
 
   function clearFilters() { setFType('all'); setFCategoryId(''); setFMonth(''); setFAmountMin(''); setFAmountMax('') }
@@ -181,49 +198,94 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
     startDel(async () => { await deleteTransaction(delTxn.id); setDelTxn(null); router.refresh() })
   }
 
+  // Rows fade in on first paint and whenever the filter result changes.
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced || !ledgerRef.current) return
+    const ctx = gsap.context(() => {
+      gsap.from('[data-txn-row]', {
+        opacity: 0, y: 10, duration: 0.35, ease: 'power2.out', stagger: 0.02, overwrite: true,
+      })
+    }, ledgerRef)
+    return () => ctx.revert()
+  }, [filtered.length, fType, fCategoryId, fMonth])
+
+  const heroChips = (
+    <div className="flex flex-wrap gap-2">
+      {[
+        { l: 'In',  v: totals.income,  c: '#34d399', bg: 'rgba(16,185,129,0.12)', bd: 'rgba(16,185,129,0.3)' },
+        { l: 'Out', v: totals.expense, c: '#fb7185', bg: 'rgba(244,63,94,0.12)',  bd: 'rgba(244,63,94,0.28)' },
+        { l: 'Net', v: totals.net,     c: totals.net >= 0 ? '#6ee7b7' : '#fb7185', bg: 'rgba(148,163,184,0.10)', bd: 'rgba(148,163,184,0.22)' },
+      ].map(s => (
+        <span key={s.l} className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+          style={{ background: s.bg, border: `1px solid ${s.bd}` }}>
+          <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>{s.l}</span>
+          <span className="text-xs font-black" style={{ color: s.c }}>{formatCurrency(s.v, 'INR')}</span>
+        </span>
+      ))}
+    </div>
+  )
+
   return (
     <>
       <div className="space-y-5">
-        {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>Transactions</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Track your income and expenses</p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setShowFilters(v => !v)}
-              className={cn('flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl transition-all', showFilters ? 'text-emerald-400' : 'text-gray-400 hover:text-gray-300')}
-              style={{ border: `1px solid ${showFilters ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.1)'}`, background: showFilters ? 'rgba(52,211,153,0.08)' : 'transparent' }}>
-              <SlidersHorizontal className="w-4 h-4" />
-              Filter{activeFilters > 0 && <span className="ml-1 bg-emerald-500 text-black text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{activeFilters}</span>}
-            </button>
-            <button onClick={() => setAccOpen(true)}
-              className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold px-3 sm:px-4 py-2 rounded-xl transition-all"
-              style={{ border: '1px solid rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.65)', background: 'rgba(255,255,255,0.04)' }}>
-              <Plus className="w-4 h-4" /> Account
-            </button>
-            <button onClick={() => setTxnOpen(true)}
-              className="flex items-center gap-1.5 text-xs sm:text-sm font-bold px-3 sm:px-4 py-2 rounded-xl transition-all duration-150 hover:-translate-y-px hover:shadow-md hover:shadow-emerald-500/20 text-black"
-              style={{ background: '#10b981' }}>
-              <Plus className="w-4 h-4" /> Add
-            </button>
-          </div>
-        </div>
+        <PageHero
+          kicker="Transactions"
+          title={<>Every rupee,<br />accounted for.</>}
+          subtitle={
+            activeFilters > 0
+              ? `Showing ${filtered.length} of ${transactions.length} entries`
+              : `${transactions.length} ${transactions.length === 1 ? 'entry' : 'entries'} on record`
+          }
+          shape="ring"
+          intensity={0.55}
+          actions={
+            <>
+              <button onClick={() => setShowFilters(v => !v)}
+                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5"
+                style={{
+                  border: `1px solid ${showFilters ? 'rgba(52,211,153,0.45)' : 'rgba(148,163,184,0.25)'}`,
+                  background: showFilters ? 'rgba(52,211,153,0.12)' : 'rgba(148,163,184,0.08)',
+                  color: showFilters ? '#6ee7b7' : 'rgba(226,232,240,0.85)',
+                }}>
+                <SlidersHorizontal className="w-4 h-4" />
+                Filter
+                {activeFilters > 0 && (
+                  <span className="ml-0.5 bg-emerald-400 text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                    {activeFilters}
+                  </span>
+                )}
+              </button>
+              <button onClick={() => setAccOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5"
+                style={{ border: '1px solid rgba(148,163,184,0.25)', color: 'rgba(226,232,240,0.85)', background: 'rgba(148,163,184,0.08)' }}>
+                <Plus className="w-4 h-4" /> Account
+              </button>
+              <button onClick={() => setTxnOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/25"
+                style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#04140e' }}>
+                <Plus className="w-4 h-4" /> Add
+              </button>
+            </>
+          }
+        >
+          {transactions.length > 0 && heroChips}
+        </PageHero>
 
         {/* Filter bar */}
         {showFilters && (
-          <div className="rounded-2xl p-4 space-y-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <div className="rounded-2xl p-4 space-y-3" style={{ background: PANEL.bg, border: `1px solid ${PANEL.border}` }}>
             <div className="flex flex-wrap gap-3 items-end">
               {/* Type */}
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.35)' }}>Type</p>
-                <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.6)' }}>Type</p>
+                <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'rgba(148,163,184,0.10)' }}>
                   {(['all', 'income', 'expense'] as const).map(t => (
                     <button key={t} type="button" onClick={() => setFType(t)}
                       className="px-3 py-1.5 rounded-md text-xs font-semibold transition-all capitalize"
                       style={{
                         background: fType === t ? (t === 'income' ? 'rgba(16,185,129,0.20)' : t === 'expense' ? 'rgba(244,63,94,0.18)' : 'rgba(255,255,255,0.12)') : 'transparent',
-                        color: fType === t ? (t === 'income' ? '#34d399' : t === 'expense' ? '#f87171' : 'rgba(255,255,255,0.88)') : 'rgba(255,255,255,0.45)',
+                        color: fType === t ? (t === 'income' ? '#34d399' : t === 'expense' ? '#f87171' : 'rgba(255,255,255,0.88)') : 'rgba(148,163,184,0.7)',
                       }}>
                       {t === 'all' ? 'All' : t === 'income' ? '+ Income' : '− Expense'}
                     </button>
@@ -233,10 +295,10 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
 
               {/* Category */}
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.35)' }}>Category</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.6)' }}>Category</p>
                 <select value={fCategoryId} onChange={e => setFCategoryId(e.target.value)}
                   className="px-3 py-2 rounded-lg text-xs font-medium focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.13)', color: 'rgba(255,255,255,0.80)', minWidth: 140 }}>
+                  style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.2)', color: 'rgba(226,232,240,0.9)', minWidth: 140 }}>
                   <option value="">All categories</option>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
                 </select>
@@ -245,10 +307,10 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
               {/* Month */}
               {monthOptions.length > 0 && (
                 <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.35)' }}>Month</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.6)' }}>Month</p>
                   <select value={fMonth} onChange={e => setFMonth(e.target.value)}
                     className="px-3 py-2 rounded-lg text-xs font-medium focus:outline-none"
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.13)', color: 'rgba(255,255,255,0.80)', minWidth: 140 }}>
+                    style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.2)', color: 'rgba(226,232,240,0.9)', minWidth: 140 }}>
                     <option value="">All time</option>
                     {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                   </select>
@@ -257,43 +319,44 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
 
               {/* Amount range */}
               <div className="space-y-1">
-                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(255,255,255,0.35)' }}>Amount</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.6)' }}>Amount</p>
                 <div className="flex items-center gap-1.5">
                   <input type="number" placeholder="Min" value={fAmountMin} onChange={e => setFAmountMin(e.target.value)}
                     className="w-20 px-3 py-2 rounded-lg text-xs font-medium focus:outline-none"
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.13)', color: 'rgba(255,255,255,0.80)' }} />
-                  <span style={{ color: 'rgba(255,255,255,0.30)' }}>–</span>
+                    style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.2)', color: 'rgba(226,232,240,0.9)' }} />
+                  <span style={{ color: 'rgba(148,163,184,0.5)' }}>–</span>
                   <input type="number" placeholder="Max" value={fAmountMax} onChange={e => setFAmountMax(e.target.value)}
                     className="w-20 px-3 py-2 rounded-lg text-xs font-medium focus:outline-none"
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.13)', color: 'rgba(255,255,255,0.80)' }} />
+                    style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.2)', color: 'rgba(226,232,240,0.9)' }} />
                 </div>
               </div>
 
               {activeFilters > 0 && (
-                <button onClick={clearFilters} className="px-3 py-2 rounded-lg text-xs font-semibold transition-colors" style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.10)' }}>
+                <button onClick={clearFilters} className="px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-white/5"
+                  style={{ color: 'rgba(148,163,184,0.8)', border: '1px solid rgba(148,163,184,0.18)' }}>
                   Clear all
                 </button>
               )}
             </div>
-            <p style={{ color: 'rgba(255,255,255,0.30)', fontSize: '11px' }}>
+            <p style={{ color: 'rgba(148,163,184,0.55)', fontSize: '11px' }}>
               Showing {filtered.length} of {transactions.length} transactions
             </p>
           </div>
         )}
 
-        {/* Table */}
-        <div className="surface-light rounded-2xl overflow-hidden">
+        {/* Ledger */}
+        <div ref={ledgerRef} className="rounded-2xl overflow-hidden" style={{ background: PANEL.bg, border: `1px solid ${PANEL.border}` }}>
           {filtered.length > 0 ? (
             <>
-              <div className="hidden sm:block">
+              <div className="hidden sm:block overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-100">
-                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
-                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Description</th>
-                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">Category</th>
-                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden md:table-cell">Account</th>
-                      <th className="text-right px-3 sm:px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Amount</th>
+                    <tr style={{ borderBottom: `1px solid ${PANEL.border}` }}>
+                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: PANEL.muted }}>Date</th>
+                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: PANEL.muted }}>Description</th>
+                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest hidden sm:table-cell" style={{ color: PANEL.muted }}>Category</th>
+                      <th className="text-left px-3 sm:px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest hidden md:table-cell" style={{ color: PANEL.muted }}>Account</th>
+                      <th className="text-right px-3 sm:px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: PANEL.muted }}>Amount</th>
                       <th className="px-4 py-3.5 w-20"></th>
                     </tr>
                   </thead>
@@ -301,29 +364,30 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                     {filtered.map(txn => {
                       const cat = txn.category_id ? categories.find(c => c.id === txn.category_id) : null
                       const acc = txn.account_id ? accounts.find(a => a.id === txn.account_id) : null
+                      const income = txn.type === 'income'
                       return (
-                        <tr key={txn.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
-                          <td className="px-3 sm:px-6 py-4 text-sm text-gray-400 font-medium whitespace-nowrap align-top">
+                        <tr key={txn.id} data-txn-row className="transition-colors group hover:bg-white/[0.03]" style={{ borderBottom: `1px solid ${PANEL.divider}` }}>
+                          <td className="px-3 sm:px-6 py-4 text-sm font-medium whitespace-nowrap align-top" style={{ color: 'rgba(148,163,184,0.8)' }}>
                             {new Date(txn.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </td>
                           <td className="px-3 sm:px-6 py-4">
                             <div className="flex items-start gap-2.5">
                               <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5"
-                                style={{ background: txn.type === 'income' ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.12)', color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
-                                {txn.type === 'income' ? '+' : '−'}
+                                style={{ background: income ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.12)', color: income ? '#34d399' : '#fb7185' }}>
+                                {income ? '+' : '−'}
                               </div>
                               <div className="min-w-0">
                                 <p className="text-sm font-semibold truncate max-w-[200px]" style={{ color: 'rgba(255,255,255,0.92)' }}>
                                   {txn.merchant ?? txn.note ?? 'Transaction'}
                                 </p>
                                 {txn.merchant && txn.note && (
-                                  <p className="flex items-center gap-1 mt-1 truncate max-w-[220px]" style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px', fontWeight: 500 }}>
-                                    <StickyNote className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.40)' }} />
+                                  <p className="flex items-center gap-1 mt-1 truncate max-w-[220px]" style={{ color: 'rgba(148,163,184,0.75)', fontSize: '12px', fontWeight: 500 }}>
+                                    <StickyNote className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(148,163,184,0.55)' }} />
                                     {txn.note}
                                   </p>
                                 )}
                                 {acc && (
-                                  <p className="flex items-center gap-1.5 mt-1 md:hidden" style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.45)' }}>
+                                  <p className="flex items-center gap-1.5 mt-1 md:hidden" style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(148,163,184,0.65)' }}>
                                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: acc.color }} />
                                     {acc.name}
                                   </p>
@@ -333,30 +397,32 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
                           </td>
                           <td className="px-3 sm:px-6 py-4 hidden sm:table-cell align-top">
                             {cat ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                                style={{ background: `${cat.color}1f`, color: '#e2e8f0', border: `1px solid ${cat.color}33` }}>
                                 {cat.icon} {cat.name}
                               </span>
-                            ) : <span className="text-xs text-gray-300">—</span>}
+                            ) : <span className="text-xs" style={{ color: 'rgba(148,163,184,0.45)' }}>—</span>}
                           </td>
                           <td className="px-3 sm:px-6 py-4 hidden md:table-cell align-top">
                             {acc ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                                style={{ background: 'rgba(148,163,184,0.12)', color: '#e2e8f0' }}>
                                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: acc.color }} />
                                 {acc.name}
                               </span>
-                            ) : <span className="text-xs text-gray-300">—</span>}
+                            ) : <span className="text-xs" style={{ color: 'rgba(148,163,184,0.45)' }}>—</span>}
                           </td>
                           <td className="px-3 sm:px-6 py-4 text-right align-top">
-                            <span className="text-sm font-black whitespace-nowrap" style={{ color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
-                              {txn.type === 'income' ? '+' : '−'}{formatCurrency(Number(txn.amount_in_base), txn.currency)}
+                            <span className="text-sm font-black whitespace-nowrap" style={{ color: income ? '#34d399' : '#fb7185' }}>
+                              {income ? '+' : '−'}{formatCurrency(Number(txn.amount_in_base), txn.currency)}
                             </span>
                           </td>
                           <td className="px-2 sm:px-4 py-4 align-top">
-                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => setEditTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-50 transition-colors" title="Edit">
+                            <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                              <button onClick={() => setEditTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:text-emerald-400 hover:bg-emerald-400/10" style={{ color: 'rgba(148,163,184,0.7)' }} title="Edit">
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
-                              <button onClick={() => setDelTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete">
+                              <button onClick={() => setDelTxn(txn)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:text-red-400 hover:bg-red-400/10" style={{ color: 'rgba(148,163,184,0.7)' }} title="Delete">
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
@@ -372,37 +438,38 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
               <div className="sm:hidden">
                 {filtered.map(txn => {
                   const acc = txn.account_id ? accounts.find(a => a.id === txn.account_id) : null
+                  const income = txn.type === 'income'
                   return (
-                    <div key={txn.id} className="flex items-start justify-between gap-2 px-4 py-3.5 border-b border-gray-50 last:border-0">
+                    <div key={txn.id} data-txn-row className="flex items-start justify-between gap-2 px-4 py-3.5" style={{ borderBottom: `1px solid ${PANEL.divider}` }}>
                       <div className="flex items-start gap-2.5 min-w-0 flex-1">
                         <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-black flex-shrink-0 mt-0.5"
-                          style={{ background: txn.type === 'income' ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.12)', color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
-                          {txn.type === 'income' ? '+' : '−'}
+                          style={{ background: income ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.12)', color: income ? '#34d399' : '#fb7185' }}>
+                          {income ? '+' : '−'}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold truncate" style={{ color: 'rgba(255,255,255,0.92)' }}>
                             {txn.merchant ?? txn.note ?? 'Transaction'}
                           </p>
-                          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                          <p className="text-[11px] mt-0.5" style={{ color: 'rgba(148,163,184,0.65)' }}>
                             {new Date(txn.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
                             {acc ? ` · ${acc.name}` : ''}
                           </p>
                           {txn.merchant && txn.note && (
-                            <p className="truncate mt-0.5" style={{ color: 'rgba(255,255,255,0.5)', fontSize: '11px' }}>
+                            <p className="truncate mt-0.5" style={{ color: 'rgba(148,163,184,0.75)', fontSize: '11px' }}>
                               {txn.note}
                             </p>
                           )}
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                        <span className="text-sm font-black whitespace-nowrap" style={{ color: txn.type === 'income' ? '#10b981' : '#f43f5e' }}>
-                          {txn.type === 'income' ? '+' : '−'}{formatCurrency(Number(txn.amount_in_base), txn.currency)}
+                        <span className="text-sm font-black whitespace-nowrap" style={{ color: income ? '#34d399' : '#fb7185' }}>
+                          {income ? '+' : '−'}{formatCurrency(Number(txn.amount_in_base), txn.currency)}
                         </span>
                         <div className="flex items-center gap-0.5">
-                          <button onClick={() => setEditTxn(txn)} className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400" title="Edit">
+                          <button onClick={() => setEditTxn(txn)} className="w-6 h-6 rounded-md flex items-center justify-center" style={{ color: 'rgba(148,163,184,0.7)' }} title="Edit">
                             <Pencil className="w-3 h-3" />
                           </button>
-                          <button onClick={() => setDelTxn(txn)} className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400" title="Delete">
+                          <button onClick={() => setDelTxn(txn)} className="w-6 h-6 rounded-md flex items-center justify-center" style={{ color: 'rgba(148,163,184,0.7)' }} title="Delete">
                             <Trash2 className="w-3 h-3" />
                           </button>
                         </div>
@@ -415,14 +482,17 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
           ) : (
             <div className="py-20 text-center">
               <p className="text-3xl mb-3">{transactions.length > 0 ? '🔍' : '💸'}</p>
-              <p className="text-sm font-semibold text-gray-500">
+              <p className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>
                 {transactions.length > 0 ? 'No transactions match your filters' : 'No transactions yet'}
               </p>
-              <p className="text-xs text-gray-400 mt-1 mb-4">
-                {transactions.length > 0 ? <button onClick={clearFilters} className="text-emerald-400 underline">Clear filters</button> : 'Click Add to record your first one'}
+              <p className="text-xs mt-1 mb-4" style={{ color: 'rgba(148,163,184,0.7)' }}>
+                {transactions.length > 0
+                  ? <button onClick={clearFilters} className="text-emerald-400 underline underline-offset-2">Clear filters</button>
+                  : 'Click Add to record your first one'}
               </p>
               {transactions.length === 0 && (
-                <button onClick={() => setTxnOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+                <button onClick={() => setTxnOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg transition-all hover:-translate-y-0.5"
+                  style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7' }}>
                   <Plus className="w-3.5 h-3.5" /> Add Transaction
                 </button>
               )}
