@@ -10,8 +10,8 @@ import { formatCurrency } from '@/lib/utils'
  * three.js only loads on the client, and only once the hero is actually
  * mounted. It never blocks first paint or lands in the server bundle.
  */
-const NetWorthScene = dynamic(
-  () => import('./net-worth-scene').then(m => m.NetWorthScene),
+const AmbientScene = dynamic(
+  () => import('@/components/shared/ambient-scene').then(m => m.AmbientScene),
   { ssr: false, loading: () => null },
 )
 
@@ -108,7 +108,7 @@ export function DashboardHero({
         }}
       >
         <div className="absolute inset-0">
-          <NetWorthScene positive={positive} intensity={intensity} />
+          <AmbientScene accent={positive ? '#10b981' : '#f43f5e'} shape="knot" intensity={intensity} />
         </div>
 
         {/*
@@ -150,7 +150,7 @@ export function DashboardHero({
             href="/dashboard/transactions"
             data-anim="head"
             className="flex-shrink-0 inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/25 active:translate-y-0"
-            style={{ background: '#10b981', color: '#04140e' }}
+            style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#04140e' }}
           >
             <Plus className="w-4 h-4" /> Add transaction
           </Link>
@@ -165,25 +165,29 @@ export function DashboardHero({
             <div
               key={k.key}
               data-anim="kpi"
-              className="surface-light rounded-2xl p-5 group transition-transform duration-200 hover:-translate-y-0.5"
+              className="relative overflow-hidden rounded-2xl p-5 group transition-transform duration-200 hover:-translate-y-0.5"
+              style={{
+                background: `radial-gradient(120% 120% at 88% 6%, ${k.color}14 0%, rgba(11,14,20,0) 60%), #0d1017`,
+                border: '1px solid rgba(148,163,184,0.13)',
+              }}
             >
               <div className="flex items-center justify-between mb-4">
-                <p className="text-xs text-gray-400 font-medium truncate">{k.label}</p>
+                <p className="text-xs font-medium truncate" style={{ color: 'rgba(148,163,184,0.8)' }}>{k.label}</p>
                 <div
                   className="w-8 h-8 rounded-lg flex items-center justify-center transition-transform duration-200 group-hover:scale-110 group-hover:rotate-6"
-                  style={{ background: k.color + '15', color: k.color }}
+                  style={{ background: k.color + '1f', color: k.color }}
                 >
                   <Icon className="w-4 h-4" />
                 </div>
               </div>
               <p
                 data-count={k.value}
-                className="text-2xl font-black text-gray-900 truncate"
-                style={{ letterSpacing: '-0.02em' }}
+                className="text-2xl font-black truncate"
+                style={{ letterSpacing: '-0.03em', color: '#ffffff' }}
               >
                 {formatCurrency(k.value, currency)}
               </p>
-              {k.note && <p className="text-xs text-gray-400 mt-1 truncate">{k.note}</p>}
+              {k.note && <p className="text-xs mt-1 truncate" style={{ color: 'rgba(148,163,184,0.65)' }}>{k.note}</p>}
             </div>
           )
         })}
