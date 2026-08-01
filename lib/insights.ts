@@ -258,7 +258,7 @@ export function buildCoach(opts: {
   // Budget pacing
   const monthBudgets = budgets.filter(b => b.month.slice(0, 7) === monthStart.slice(0, 7))
   const expectedPct = (elapsedDays / daysInMonth) * 100
-  const budgetPace: BudgetPace[] = monthBudgets.map(b => {
+  const budgetPace: BudgetPace[] = monthBudgets.map((b): BudgetPace => {
     const spent = monthExpenses
       .filter(t => t.category_id === b.category_id)
       .reduce((s, t) => s + n(t.amount_in_base), 0)
@@ -286,7 +286,7 @@ export function buildCoach(opts: {
 
   const goalImpact: GoalImpact[] = goals
     .filter(g => g.status === 'active')
-    .map(g => {
+    .map((g): GoalImpact => {
       const remaining = Math.max(n(g.target_amount) - n(g.saved_amount), 0)
       const pace = n(g.monthly_contribution) > 0 ? n(g.monthly_contribution) : monthlySurplus
       const months = pace > 0 ? remaining / pace : null
