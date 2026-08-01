@@ -2,122 +2,153 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { ReportsView } from './reports-view'
 
+const MONTHS_BACK = 6
+
+/** Local-date YYYY-MM-DD. toISOString() shifts IST midnight back a day. */
+function localYmd(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+function dayOf(ymd: string): number {
+  return Number(ymd.slice(8, 10))
+}
+
+function dowOf(ymd: string): number {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return new Date(y, m - 1, d).getDay()
+}
+
+const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
 export default async function ReportsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
   const now = new Date()
-  const months: { label: string; start: string; end: string }[] = []
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    months.push({
-      label: d.toLocaleDateString('en-IN', { month: 'short' }),
-      start: d.toISOString().split('T')[0],
-      end: new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString().split('T')[0],
-    })
-  }
-  const startOfYear = `${now.getFullYear()}-01-01`
+  const rangeStart = new Date(now.getFullYear(), now.getMonth() - (MONTHS_BACK - 1), 1)
 
-  const [{ data: allTxns }, { data: categories }] = await Promise.all([
+  const [{ data: allTxns }, { data: categories }, { data: profile }] = await Promise.all([
     supabase.from('transactions')
       .select('id, type, amount_in_base, date, category_id, merchant')
-      .eq('user_id', user.id).gte('date', startOfYear).order('date', { ascending: false }),
-    supabase.from('categories').select('id, name, icon').order('name'),
+      .eq('user_id', user.id)
+      .gte('date', localYmd(rangeStart))
+      .order('date', { ascending: false }),
+    supabase.from('categories').select('id, name, icon, color').order('name'),
+    supabase.from('profiles').select('base_currency').eq('id', user.id).single(),
   ])
 
-  const monthly = months.map(m => {
-    const txns    = allTxns?.filter(t => t.date >= m.start && t.date < m.end) ?? []
-    const income  = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount_in_base), 0)
-    const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount_in_base), 0)
-    return { ...m, income, expense, net: income - expense, count: txns.length }
-  })
+  const currency = profile?.base_currency ?? 'INR'
+  const txns = allTxns ?? []
+  const catOf = (id: string | null) => categories?.find(c => c.id === id)
 
-  const thisMonth = monthly[monthly.length - 1]
-  const lastMonth = monthly[monthly.length - 2] ?? { income: 0, expense: 0, net: 0 }
+  const months = Array.from({ length: MONTHS_BACK }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (MONTHS_BACK - 1 - i), 1)
+    const start = localYmd(d)
+    const end = localYmd(new Date(d.getFullYear(), d.getMonth() + 1, 1))
+    const isCurrent = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
 
-  const pctDelta = (cur: number, prev: number) => prev === 0 ? (cur > 0 ? 100 : 0) : ((cur - prev) / prev) * 100
+    const monthTxns = txns.filter(t => t.date >= start && t.date < end)
+    const expenseTxns = monthTxns.filter(t => t.type === 'expense')
+    const incomeTxns = monthTxns.filter(t => t.type === 'income')
 
-  const currentTxns = allTxns?.filter(t => t.date >= thisMonth.start && t.date < thisMonth.end) ?? []
-  const expenseTxns = currentTxns.filter(t => t.type === 'expense')
+    const income = incomeTxns.reduce((s, t) => s + Number(t.amount_in_base), 0)
+    const expense = expenseTxns.reduce((s, t) => s + Number(t.amount_in_base), 0)
 
-  // Category breakdown
-  const catMap = new Map<string, number>()
-  expenseTxns.forEach(t => {
-    const key = t.category_id ?? '__none__'
-    catMap.set(key, (catMap.get(key) ?? 0) + Number(t.amount_in_base))
-  })
-  const catBreakdown = Array.from(catMap.entries())
-    .map(([catId, amount]) => {
-      const cat = categories?.find(c => c.id === catId)
-      return { catId, icon: cat?.icon ?? '📦', name: cat?.name ?? 'Uncategorized', amount }
+    const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+    const firstDayOfMonth = d.getDay()
+    const elapsedDays = isCurrent ? now.getDate() : daysInMonth
+
+    // Category breakdown
+    const catMap = new Map<string, number>()
+    expenseTxns.forEach(t => {
+      const key = t.category_id ?? '__none__'
+      catMap.set(key, (catMap.get(key) ?? 0) + Number(t.amount_in_base))
     })
-    .sort((a, b) => b.amount - a.amount)
+    const catBreakdown = Array.from(catMap.entries())
+      .map(([catId, amount]) => {
+        const cat = catOf(catId)
+        return {
+          catId,
+          icon: cat?.icon ?? '\u{1F4E6}',
+          name: cat?.name ?? 'Uncategorized',
+          color: cat?.color ?? '#f43f5e',
+          amount,
+        }
+      })
+      .sort((a, b) => b.amount - a.amount)
 
-  // Top merchants
-  const merchMap = new Map<string, number>()
-  expenseTxns.forEach(t => {
-    const key = t.merchant?.trim() || 'Other'
-    merchMap.set(key, (merchMap.get(key) ?? 0) + Number(t.amount_in_base))
-  })
-  const topMerchants = Array.from(merchMap.entries()).map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount).slice(0, 5)
-
-  // Day of week
-  const dowLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const dowMap = new Array(7).fill(0)
-  expenseTxns.forEach(t => { dowMap[new Date(t.date).getDay()] += Number(t.amount_in_base) })
-  const byDayOfWeek = dowLabels.map((label, i) => ({ label, amount: dowMap[i] }))
-
-  // ── Daily spend for current month (calendar heatmap) ──────────────────────
-  const daysInMonth     = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getDay() // 0=Sun
-  const dailySpend      = new Array(daysInMonth + 1).fill(0) // index = day number
-  const dailyTxns: { day: number; id: string; merchant: string; amount: number; icon: string; categoryName: string }[][] =
-    Array.from({ length: daysInMonth + 1 }, () => [])
-  expenseTxns.forEach(t => {
-    const d = new Date(t.date).getDate()
-    dailySpend[d] += Number(t.amount_in_base)
-    const cat = categories?.find(c => c.id === t.category_id)
-    dailyTxns[d].push({
-      day: d,
-      id: t.id,
-      merchant: t.merchant?.trim() || 'Uncategorized',
-      amount: Number(t.amount_in_base),
-      icon: cat?.icon ?? '📦',
-      categoryName: cat?.name ?? 'Uncategorized',
+    // Top merchants
+    const merchMap = new Map<string, number>()
+    expenseTxns.forEach(t => {
+      const key = t.merchant?.trim() || 'Other'
+      merchMap.set(key, (merchMap.get(key) ?? 0) + Number(t.amount_in_base))
     })
+    const topMerchants = Array.from(merchMap.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+
+    // Day of week
+    const dowMap = new Array(7).fill(0)
+    expenseTxns.forEach(t => { dowMap[dowOf(t.date)] += Number(t.amount_in_base) })
+    const byDayOfWeek = DOW_LABELS.map((label, idx) => ({ label, amount: dowMap[idx] }))
+
+    // Daily series
+    const dailySpend: number[] = new Array(daysInMonth + 1).fill(0)
+    const dailyIncome: number[] = new Array(daysInMonth + 1).fill(0)
+    const dailyTxns: {
+      day: number; id: string; merchant: string; amount: number
+      icon: string; color: string; categoryName: string; type: 'income' | 'expense'
+    }[][] = Array.from({ length: daysInMonth + 1 }, () => [])
+
+    monthTxns.forEach(t => {
+      if (t.type !== 'expense' && t.type !== 'income') return
+      const day = dayOf(t.date)
+      const amount = Number(t.amount_in_base)
+      if (t.type === 'expense') dailySpend[day] += amount
+      else dailyIncome[day] += amount
+      const cat = catOf(t.category_id)
+      dailyTxns[day].push({
+        day,
+        id: t.id,
+        merchant: t.merchant?.trim() || 'Untitled',
+        amount,
+        icon: cat?.icon ?? '\u{1F4E6}',
+        color: cat?.color ?? (t.type === 'income' ? '#10b981' : '#f43f5e'),
+        categoryName: cat?.name ?? 'Uncategorized',
+        type: t.type as 'income' | 'expense',
+      })
+    })
+    dailyTxns.forEach(list => list.sort((a, b) => b.amount - a.amount))
+
+    const biggest = expenseTxns.reduce<typeof expenseTxns[number] | undefined>(
+      (max, t) => Number(t.amount_in_base) > Number(max?.amount_in_base ?? 0) ? t : max,
+      undefined,
+    )
+
+    return {
+      label: d.toLocaleDateString('en-IN', { month: 'short' }),
+      monthYear: d.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+      shortYear: d.toLocaleDateString('en-IN', { month: 'short', year: '2-digit' }),
+      start, end, isCurrent,
+      income, expense, net: income - expense,
+      txnCount: monthTxns.length,
+      expenseCount: expenseTxns.length,
+      daysInMonth, firstDayOfMonth, elapsedDays,
+      todayDay: isCurrent ? now.getDate() : null,
+      catBreakdown, topMerchants, byDayOfWeek,
+      dailySpend, dailyIncome, dailyTxns,
+      savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0,
+      avgDailySpend: elapsedDays > 0 ? expense / elapsedDays : 0,
+      avgTxnSize: expenseTxns.length > 0 ? expense / expenseTxns.length : 0,
+      biggestExpense: biggest
+        ? { merchant: biggest.merchant?.trim() || 'Transaction', amount: Number(biggest.amount_in_base) }
+        : null,
+    }
   })
-  // Largest first within each day
-  dailyTxns.forEach(list => list.sort((a, b) => b.amount - a.amount))
-  const monthYear = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
 
-  const biggest = expenseTxns.reduce((max, t) => Number(t.amount_in_base) > Number(max?.amount_in_base ?? 0) ? t : max, expenseTxns[0])
-
-  const savingsRate    = thisMonth.income > 0 ? ((thisMonth.income - thisMonth.expense) / thisMonth.income) * 100 : 0
-  const avgDailySpend  = thisMonth.expense / daysInMonth
-  const avgTxnSize     = expenseTxns.length > 0 ? thisMonth.expense / expenseTxns.length : 0
-
-  return (
-    <ReportsView
-      monthly={monthly}
-      thisMonth={thisMonth}
-      incomeDelta={pctDelta(thisMonth.income, lastMonth.income)}
-      expenseDelta={pctDelta(thisMonth.expense, lastMonth.expense)}
-      netDelta={pctDelta(thisMonth.net, lastMonth.net)}
-      catBreakdown={catBreakdown}
-      totalExpenses={thisMonth.expense}
-      topMerchants={topMerchants}
-      byDayOfWeek={byDayOfWeek}
-      dailySpend={dailySpend}
-      dailyTxns={dailyTxns}
-      daysInMonth={daysInMonth}
-      firstDayOfMonth={firstDayOfMonth}
-      monthYear={monthYear}
-      savingsRate={savingsRate}
-      avgDailySpend={avgDailySpend}
-      avgTxnSize={avgTxnSize}
-      biggestExpense={biggest ? { merchant: biggest.merchant ?? 'Transaction', amount: Number(biggest.amount_in_base) } : null}
-      txnCount={currentTxns.length}
-    />
-  )
+  return <ReportsView months={months} currency={currency} />
 }
