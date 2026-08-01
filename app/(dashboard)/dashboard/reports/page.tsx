@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { ReportsView } from './reports-view'
+import { buildCoach } from '@/lib/insights'
+import { CoachPanel } from './coach-panel'
 
 const MONTHS_BACK = 6
 
@@ -30,7 +32,12 @@ export default async function ReportsPage() {
   const now = new Date()
   const rangeStart = new Date(now.getFullYear(), now.getMonth() - (MONTHS_BACK - 1), 1)
 
-  const [{ data: allTxns }, { data: categories }, { data: profile }] = await Promise.all([
+  const monthStartYmd = localYmd(new Date(now.getFullYear(), now.getMonth(), 1))
+
+  const [
+    { data: allTxns }, { data: categories }, { data: profile },
+    { data: accounts }, { data: budgets }, { data: goals },
+  ] = await Promise.all([
     supabase.from('transactions')
       .select('id, type, amount_in_base, date, category_id, merchant')
       .eq('user_id', user.id)
@@ -38,6 +45,12 @@ export default async function ReportsPage() {
       .order('date', { ascending: false }),
     supabase.from('categories').select('id, name, icon, color').order('name'),
     supabase.from('profiles').select('base_currency').eq('id', user.id).single(),
+    supabase.from('accounts').select('id, name, type, balance').eq('user_id', user.id),
+    supabase.from('budgets').select('id, category_id, limit_amount, month')
+      .eq('user_id', user.id).eq('month', monthStartYmd),
+    supabase.from('goals')
+      .select('id, title, emoji, target_amount, saved_amount, deadline, monthly_contribution, status')
+      .eq('user_id', user.id),
   ])
 
   const currency = profile?.base_currency ?? 'INR'
@@ -150,5 +163,19 @@ export default async function ReportsPage() {
     }
   })
 
-  return <ReportsView months={months} currency={currency} />
+  const coach = buildCoach({
+    txns: txns,
+    accounts: accounts ?? [],
+    budgets: budgets ?? [],
+    goals: goals ?? [],
+    categories: categories ?? [],
+    now,
+  })
+
+  return (
+    <div className="space-y-5">
+      <CoachPanel coach={coach} currency={currency} />
+      <ReportsView months={months} currency={currency} />
+    </div>
+  )
 }
