@@ -1,13 +1,18 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { gsap } from 'gsap'
 import { Plus, X, PiggyBank, Trash2, AlertTriangle } from 'lucide-react'
 import { addGoal, addGoalContribution, deleteGoal } from '@/app/actions/goals'
 import { formatCurrency } from '@/lib/utils'
 import { CURRENCIES } from '@/lib/constants'
+import { PageHero } from '@/components/shared/page-hero'
 
 type Goal    = { id: string; title: string; emoji: string; target_amount: number; saved_amount: number; currency: string; deadline: string | null; status: string }
 type Account = { id: string; name: string; color: string; balance: number; currency: string }
+
+/** Shared dark panel tokens, matching the rest of the dashboard. */
+const PANEL = { bg: '#0d1017', border: 'rgba(148,163,184,0.13)', heading: '#f1f5f9', muted: 'rgba(148,163,184,0.75)', faint: 'rgba(148,163,184,0.6)' }
 
 function CreateModal({ open, onClose, onSuccess }: { open: boolean; onClose: () => void; onSuccess: () => void }) {
   const [isPending, startTransition] = useTransition()
@@ -167,34 +172,60 @@ function GoalCard({ g, onAdd, onDelete }: { g: Goal; onAdd: () => void; onDelete
   const pct = Number(g.target_amount) > 0 ? Math.min((Number(g.saved_amount) / Number(g.target_amount)) * 100, 100) : 0
   const daysLeft = g.deadline ? Math.ceil((new Date(g.deadline).getTime() - Date.now()) / 86400000) : null
   const done = g.status === 'completed' || pct >= 100
+  const overdue = daysLeft !== null && daysLeft < 0 && !done
+  const accent = done ? '#34d399' : overdue ? '#fb7185' : '#10b981'
+
   return (
-    <div className="surface-light rounded-2xl p-5 group">
-      <div className="flex items-start justify-between mb-4">
-        <div>
+    <div
+      data-goal-card
+      className="relative overflow-hidden rounded-2xl p-5 group transition-transform duration-200 hover:-translate-y-0.5"
+      style={{
+        background: `radial-gradient(120% 120% at 88% 8%, ${accent}1a 0%, rgba(11,14,20,0) 62%), ${PANEL.bg}`,
+        border: `1px solid ${done ? 'rgba(52,211,153,0.28)' : overdue ? 'rgba(244,63,94,0.25)' : PANEL.border}`,
+      }}
+    >
+      {/* Landing-page triangle motif */}
+      <svg aria-hidden width="70" height="70" viewBox="0 0 24 24"
+        className="absolute -top-2 -right-2 transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110"
+        style={{ opacity: 0.07 }}>
+        <path d="M12 3 L21 20 L3 20 Z" fill="none" stroke={accent} strokeWidth="1.2" />
+      </svg>
+
+      <div className="relative flex items-start justify-between mb-4 gap-2">
+        <div className="min-w-0">
           <span className="text-2xl">{g.emoji}</span>
-          <p className="text-sm font-bold text-gray-900 mt-1">{g.title}</p>
+          <p className="text-sm font-bold mt-1 truncate" style={{ color: PANEL.heading }}>{g.title}</p>
           {daysLeft !== null && !done && (
-            <p className={`text-[11px] mt-0.5 ${daysLeft < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+            <p className="text-[11px] mt-0.5" style={{ color: overdue ? '#fb7185' : PANEL.faint }}>
               {daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : `${daysLeft}d left`}
             </p>
           )}
+          {done && (
+            <p className="text-[11px] mt-0.5 font-semibold" style={{ color: '#34d399' }}>Reached</p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-black ${done ? 'text-emerald-600' : 'text-gray-600'}`}>{Math.round(pct)}%</span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-sm font-black" style={{ color: done ? '#34d399' : '#e2e8f0' }}>{Math.round(pct)}%</span>
           {!done && (
-            <button onClick={onAdd} className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded-lg transition-colors">
+            <button onClick={onAdd}
+              className="flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg transition-all hover:-translate-y-0.5"
+              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7' }}>
               <PiggyBank className="w-3 h-3" /> Add
             </button>
           )}
-          <button onClick={onDelete} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={onDelete}
+            className="w-6 h-6 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all hover:bg-red-400/10 hover:text-red-400"
+            style={{ color: 'rgba(148,163,184,0.7)' }}>
             <Trash2 className="w-3 h-3" />
           </button>
         </div>
       </div>
-      <div className="w-full h-2 rounded-full bg-gray-100 mb-2">
-        <div className="h-2 rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: done ? '#10b981' : 'linear-gradient(90deg,#10b981,#34d399)' }} />
+
+      <div className="relative w-full h-2 rounded-full mb-2 overflow-hidden" style={{ background: 'rgba(148,163,184,0.12)' }}>
+        <div data-goal-bar className="h-2 rounded-full"
+          style={{ width: `${pct}%`, background: done ? '#10b981' : 'linear-gradient(90deg,#10b981,#34d399)' }} />
       </div>
-      <div className="flex justify-between text-[11px] text-gray-400">
+      <div className="relative flex justify-between text-[11px]" style={{ color: PANEL.faint }}>
         <span>{formatCurrency(Number(g.saved_amount), g.currency)} saved</span>
         <span>{formatCurrency(Number(g.target_amount), g.currency)} goal</span>
       </div>
@@ -207,29 +238,73 @@ export function GoalsView({ goals, accounts }: { goals: Goal[]; accounts: Accoun
   const [createOpen, setCreateOpen] = useState(false)
   const [contributeGoal, setContributeGoal] = useState<Goal | null>(null)
   const [delGoal, setDelGoal] = useState<Goal | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const refresh = () => router.refresh()
 
   const active    = goals.filter(g => g.status !== 'completed' && Number(g.saved_amount) < Number(g.target_amount))
   const completed = goals.filter(g => g.status === 'completed' || Number(g.saved_amount) >= Number(g.target_amount))
 
+  const totalSaved  = goals.reduce((s, g) => s + Number(g.saved_amount), 0)
+  const totalTarget = goals.reduce((s, g) => s + Number(g.target_amount), 0)
+  const overallPct  = totalTarget > 0 ? Math.min((totalSaved / totalTarget) * 100, 100) : 0
+
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced || !listRef.current) return
+    const ctx = gsap.context(() => {
+      gsap.from('[data-goal-card]', { opacity: 0, y: 16, duration: 0.45, ease: 'power3.out', stagger: 0.06, delay: 0.1 })
+      gsap.from('[data-goal-bar]', { scaleX: 0, transformOrigin: 'left center', duration: 0.9, ease: 'power2.out', stagger: 0.05, delay: 0.25 })
+    }, listRef)
+    return () => ctx.revert()
+  }, [goals.length])
+
   return (
     <>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>Goals</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Track your savings targets</p>
-          </div>
-          <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-black hover:-translate-y-px transition-all duration-150" style={{ background: '#10b981' }}>
-            <Plus className="w-4 h-4" /> Create goal
-          </button>
-        </div>
+        <PageHero
+          kicker="Goals"
+          title={<>Save toward<br />what matters.</>}
+          stat={goals.length > 0 ? totalSaved : undefined}
+          statLabel={goals.length > 0 ? 'Saved so far' : undefined}
+          subtitle={goals.length === 0 ? 'No goals yet' : undefined}
+          shape="orbit"
+          intensity={overallPct / 100}
+          actions={
+            <button onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/25"
+              style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#04140e' }}>
+              <Plus className="w-4 h-4" /> Create goal
+            </button>
+          }
+        >
+          {goals.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.22)' }}>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>Target</span>
+                <span className="text-xs font-black" style={{ color: '#e2e8f0' }}>{formatCurrency(totalTarget, 'INR')}</span>
+              </span>
+              <span className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)' }}>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>Progress</span>
+                <span className="text-xs font-black" style={{ color: '#6ee7b7' }}>{Math.round(overallPct)}%</span>
+              </span>
+              {active.length > 0 && (
+                <span className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+                  style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                  <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>To go</span>
+                  <span className="text-xs font-black" style={{ color: '#c4b5fd' }}>{formatCurrency(totalTarget - totalSaved, 'INR')}</span>
+                </span>
+              )}
+            </div>
+          )}
+        </PageHero>
 
         {goals.length > 0 ? (
-          <>
+          <div ref={listRef} className="space-y-6">
             {active.length > 0 && (
               <div className="space-y-3">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Active — {active.length}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#10b981' }}>Active — {active.length}</p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {active.map(g => <GoalCard key={g.id} g={g} onAdd={() => setContributeGoal(g)} onDelete={() => setDelGoal(g)} />)}
                 </div>
@@ -237,19 +312,20 @@ export function GoalsView({ goals, accounts }: { goals: Goal[]; accounts: Accoun
             )}
             {completed.length > 0 && (
               <div className="space-y-3">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Completed — {completed.length}</p>
+                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.7)' }}>Completed — {completed.length}</p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {completed.map(g => <GoalCard key={g.id} g={g} onAdd={() => setContributeGoal(g)} onDelete={() => setDelGoal(g)} />)}
                 </div>
               </div>
             )}
-          </>
+          </div>
         ) : (
-          <div className="surface-light rounded-2xl py-20 text-center">
+          <div className="rounded-2xl py-20 text-center" style={{ background: PANEL.bg, border: `1px solid ${PANEL.border}` }}>
             <p className="text-3xl mb-3">🎯</p>
-            <p className="text-sm font-semibold text-gray-500">No active goals</p>
-            <p className="text-xs text-gray-400 mt-1 mb-4">Create a goal to start tracking your savings</p>
-            <button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+            <p className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>No active goals</p>
+            <p className="text-xs mt-1 mb-4" style={{ color: PANEL.muted }}>Create a goal to start tracking your savings</p>
+            <button onClick={() => setCreateOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg transition-all hover:-translate-y-0.5"
+              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7' }}>
               <Plus className="w-3.5 h-3.5" /> Create Goal
             </button>
           </div>

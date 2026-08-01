@@ -1,15 +1,20 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { gsap } from 'gsap'
 import { Plus, X, Pencil, Trash2, AlertTriangle } from 'lucide-react'
 import { addInvestment, updateInvestment, deleteInvestment } from '@/app/actions/investments'
 import { formatCurrency } from '@/lib/utils'
 import { CURRENCIES, INVESTMENT_TYPES } from '@/lib/constants'
+import { PageHero } from '@/components/shared/page-hero'
 
 type Investment = { id: string; name: string; type: string; ticker: string | null; quantity: number; avg_buy_price: number; currency: string; current_price: number | null }
 type Account    = { id: string; name: string; color: string; balance: number; currency: string }
 
 const DARK = { bg: '#1c1c1e', border: 'rgba(255,255,255,0.10)', input: 'rgba(255,255,255,0.07)', inputBorder: 'rgba(255,255,255,0.13)', text: 'rgba(255,255,255,0.88)', label: 'rgba(255,255,255,0.38)' }
+
+/** Shared dark panel tokens, matching the rest of the dashboard. */
+const PANEL = { bg: '#0d1017', border: 'rgba(148,163,184,0.13)', divider: 'rgba(148,163,184,0.07)', heading: '#f1f5f9', muted: 'rgba(148,163,184,0.75)', faint: 'rgba(148,163,184,0.6)' }
 
 function inputStyle() {
   return { background: DARK.input, border: `1px solid ${DARK.inputBorder}`, color: DARK.text }
@@ -218,49 +223,81 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
   const [addOpen, setAddOpen] = useState(false)
   const [editInv, setEditInv] = useState<Investment | null>(null)
   const [delInv,  setDelInv]  = useState<Investment | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const refresh = () => router.refresh()
 
   const totalInvested = investments.reduce((s, i) => s + Number(i.quantity) * Number(i.avg_buy_price), 0)
   const totalCurrent  = investments.reduce((s, i) => s + Number(i.quantity) * (i.current_price != null ? Number(i.current_price) : Number(i.avg_buy_price)), 0)
   const totalPnL      = totalCurrent - totalInvested
   const pnlPct        = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0
+  const up            = totalPnL >= 0
   const TYPE_ICONS: Record<string, string> = { stock: '📈', mutual_fund: '🏦', crypto: '₿', etf: '📊', bond: '📃', real_estate: '🏠', other: '💼' }
+
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced || !listRef.current) return
+    const ctx = gsap.context(() => {
+      gsap.from('[data-inv-row]', { opacity: 0, y: 12, duration: 0.4, ease: 'power2.out', stagger: 0.04, delay: 0.1 })
+    }, listRef)
+    return () => ctx.revert()
+  }, [investments.length])
 
   return (
     <>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>Investments</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Your portfolio</p>
-          </div>
-          <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-black hover:-translate-y-px transition-all duration-150" style={{ background: '#10b981' }}>
-            <Plus className="w-4 h-4" /> Add investment
-          </button>
-        </div>
+        <PageHero
+          kicker="Portfolio"
+          title={<>Stocks, SIPs,<br />crypto and more.</>}
+          stat={investments.length > 0 ? totalCurrent : undefined}
+          statLabel={investments.length > 0 ? 'Current value' : undefined}
+          subtitle={investments.length === 0 ? 'Nothing tracked yet' : undefined}
+          accent={up ? '#10b981' : '#f43f5e'}
+          shape="orbit"
+          intensity={0.55}
+          actions={
+            <button onClick={() => setAddOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/25"
+              style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#04140e' }}>
+              <Plus className="w-4 h-4" /> Add investment
+            </button>
+          }
+        >
+          {investments.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.22)' }}>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>Invested</span>
+                <span className="text-xs font-black" style={{ color: '#e2e8f0' }}>{formatCurrency(totalInvested, 'INR')}</span>
+              </span>
+              <span className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+                style={{
+                  background: up ? 'rgba(16,185,129,0.12)' : 'rgba(244,63,94,0.12)',
+                  border: `1px solid ${up ? 'rgba(16,185,129,0.3)' : 'rgba(244,63,94,0.28)'}`,
+                }}>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>P&amp;L</span>
+                <span className="text-xs font-black" style={{ color: up ? '#6ee7b7' : '#fb7185' }}>
+                  {up ? '+' : ''}{formatCurrency(totalPnL, 'INR')} ({pnlPct.toFixed(1)}%)
+                </span>
+              </span>
+              <span className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
+                style={{ background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)' }}>
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>Holdings</span>
+                <span className="text-xs font-black" style={{ color: '#c4b5fd' }}>{investments.length}</span>
+              </span>
+            </div>
+          )}
+        </PageHero>
 
         {investments.length > 0 ? (
-          <>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { label: 'Invested',      value: formatCurrency(totalInvested, 'INR'), color: 'text-gray-900' },
-                { label: 'Current Value', value: formatCurrency(totalCurrent,  'INR'), color: 'text-gray-900' },
-                { label: 'P&L', value: `${totalPnL >= 0 ? '+' : ''}${formatCurrency(totalPnL, 'INR')} (${pnlPct.toFixed(1)}%)`, color: totalPnL >= 0 ? 'text-emerald-600' : 'text-red-500' },
-              ].map(s => (
-                <div key={s.label} className="surface-light rounded-2xl p-4">
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1">{s.label}</p>
-                  <p className={`text-sm font-black ${s.color}`} style={{ letterSpacing: '-0.02em' }}>{s.value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="surface-light rounded-2xl overflow-hidden">
+          <div ref={listRef} className="rounded-2xl overflow-hidden" style={{ background: PANEL.bg, border: `1px solid ${PANEL.border}` }}>
+            <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Asset</th>
-                    <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">Qty</th>
-                    <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Invested</th>
-                    <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest hidden sm:table-cell">P&L</th>
+                  <tr style={{ borderBottom: `1px solid ${PANEL.border}` }}>
+                    <th className="text-left px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: PANEL.muted }}>Asset</th>
+                    <th className="text-right px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest hidden sm:table-cell" style={{ color: PANEL.muted }}>Qty</th>
+                    <th className="text-right px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: PANEL.muted }}>Invested</th>
+                    <th className="text-right px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest hidden sm:table-cell" style={{ color: PANEL.muted }}>P&amp;L</th>
                     <th className="px-4 py-3.5 w-16"></th>
                   </tr>
                 </thead>
@@ -269,26 +306,33 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
                     const invested = Number(inv.quantity) * Number(inv.avg_buy_price)
                     const current  = Number(inv.quantity) * (inv.current_price != null ? Number(inv.current_price) : Number(inv.avg_buy_price))
                     const pnl      = current - invested
+                    const rowUp    = pnl >= 0
                     return (
-                      <tr key={inv.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
+                      <tr key={inv.id} data-inv-row className="transition-colors group hover:bg-white/[0.03]" style={{ borderBottom: `1px solid ${PANEL.divider}` }}>
                         <td className="px-6 py-4">
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-lg">{TYPE_ICONS[inv.type] ?? '💼'}</span>
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900">{inv.name}</p>
-                              <p className="text-[11px] text-gray-400">{inv.ticker ?? inv.type.replace('_', ' ')}</p>
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="text-lg flex-shrink-0">{TYPE_ICONS[inv.type] ?? '💼'}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold truncate" style={{ color: PANEL.heading }}>{inv.name}</p>
+                              <p className="text-[11px] capitalize" style={{ color: PANEL.faint }}>{inv.ticker ?? inv.type.replace('_', ' ')}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right hidden sm:table-cell"><span className="text-sm text-gray-500">{Number(inv.quantity).toLocaleString('en-IN')}</span></td>
-                        <td className="px-6 py-4 text-right"><span className="text-sm font-bold text-gray-900">{formatCurrency(invested, inv.currency)}</span></td>
                         <td className="px-6 py-4 text-right hidden sm:table-cell">
-                          <span className={`text-sm font-bold ${pnl >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{pnl >= 0 ? '+' : ''}{formatCurrency(pnl, inv.currency)}</span>
+                          <span className="text-sm" style={{ color: PANEL.muted }}>{Number(inv.quantity).toLocaleString('en-IN')}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <span className="text-sm font-bold" style={{ color: '#ffffff' }}>{formatCurrency(invested, inv.currency)}</span>
+                        </td>
+                        <td className="px-6 py-4 text-right hidden sm:table-cell">
+                          <span className="text-sm font-bold" style={{ color: rowUp ? '#34d399' : '#fb7185' }}>
+                            {rowUp ? '+' : ''}{formatCurrency(pnl, inv.currency)}
+                          </span>
                         </td>
                         <td className="px-4 py-4">
-                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => setEditInv(inv)} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-400 hover:bg-emerald-50 transition-colors" title="Edit"><Pencil className="w-3 h-3" /></button>
-                            <button onClick={() => setDelInv(inv)}  className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-50 transition-colors"     title="Delete"><Trash2 className="w-3 h-3" /></button>
+                          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <button onClick={() => setEditInv(inv)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:text-emerald-400 hover:bg-emerald-400/10" style={{ color: 'rgba(148,163,184,0.7)' }} title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                            <button onClick={() => setDelInv(inv)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:text-red-400 hover:bg-red-400/10" style={{ color: 'rgba(148,163,184,0.7)' }} title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </td>
                       </tr>
@@ -297,13 +341,14 @@ export function InvestmentsView({ investments, accounts }: { investments: Invest
                 </tbody>
               </table>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="surface-light rounded-2xl py-20 text-center">
+          <div className="rounded-2xl py-20 text-center" style={{ background: PANEL.bg, border: `1px solid ${PANEL.border}` }}>
             <p className="text-3xl mb-3">📈</p>
-            <p className="text-sm font-semibold text-gray-500">No investments tracked</p>
-            <p className="text-xs text-gray-400 mt-1 mb-4">Add stocks, mutual funds, crypto and more</p>
-            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+            <p className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>No investments tracked</p>
+            <p className="text-xs mt-1 mb-4" style={{ color: PANEL.muted }}>Add stocks, mutual funds, crypto and more</p>
+            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg transition-all hover:-translate-y-0.5"
+              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7' }}>
               <Plus className="w-3.5 h-3.5" /> Add Investment
             </button>
           </div>
