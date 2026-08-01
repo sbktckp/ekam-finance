@@ -2,6 +2,9 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { TransactionsView } from './transactions-view'
 
+/** How much history the month filter can reach back through. */
+const MONTHS_BACK = 12
+
 export default async function TransactionsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -9,6 +12,12 @@ export default async function TransactionsPage() {
 
   const now      = new Date()
   const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+
+  // Start of the window the ledger can show. Bounding by date rather than by
+  // row count keeps the header totals meaningful: a flat .limit() would sum
+  // whatever arbitrary slice of months happened to fit.
+  const windowStart = new Date(now.getFullYear(), now.getMonth() - (MONTHS_BACK - 1), 1)
+  const windowStr = `${windowStart.getFullYear()}-${String(windowStart.getMonth() + 1).padStart(2, '0')}-01`
 
   const [
     { data: transactions },
@@ -24,10 +33,10 @@ export default async function TransactionsPage() {
       .select('id, date, merchant, note, type, amount, amount_in_base, currency, category_id, account_id')
       .eq('user_id', user.id)
       .neq('type', 'transfer')
+      .gte('date', windowStr)
       .order('date', { ascending: false })
       .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .limit(100),
+      .order('id', { ascending: false }),
     supabase.from('accounts')
       .select('id, name, color, type, currency, balance')
       .eq('user_id', user.id)
@@ -58,6 +67,7 @@ export default async function TransactionsPage() {
       categories={categories ?? []}
       budgetByCategory={budgetByCategory}
       spentByCategory={spentByCategory}
+      currentMonth={monthStr.substring(0, 7)}
     />
   )
 }
