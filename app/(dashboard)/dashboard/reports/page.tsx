@@ -57,7 +57,7 @@ export default async function ReportsPage() {
   const txns = allTxns ?? []
   const catOf = (id: string | null) => categories?.find(c => c.id === id)
 
-  const months = Array.from({ length: MONTHS_BACK }, (_, i) => {
+  const rawMonths = Array.from({ length: MONTHS_BACK }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (MONTHS_BACK - 1 - i), 1)
     const start = localYmd(d)
     const end = localYmd(new Date(d.getFullYear(), d.getMonth() + 1, 1))
@@ -93,6 +93,25 @@ export default async function ReportsPage() {
       })
       .sort((a, b) => b.amount - a.amount)
 
+    // Income breakdown by category
+    const incCatMap = new Map<string, number>()
+    incomeTxns.forEach(t => {
+      const key = t.category_id ?? '__none__'
+      incCatMap.set(key, (incCatMap.get(key) ?? 0) + Number(t.amount_in_base))
+    })
+    const incomeBreakdown = Array.from(incCatMap.entries())
+      .map(([catId, amount]) => {
+        const cat = catOf(catId)
+        return {
+          catId,
+          icon: cat?.icon ?? '\u{1F4B0}',
+          name: cat?.name ?? 'Uncategorized',
+          color: cat?.color ?? '#10b981',
+          amount,
+        }
+      })
+      .sort((a, b) => b.amount - a.amount)
+
     // Top merchants
     const merchMap = new Map<string, number>()
     expenseTxns.forEach(t => {
@@ -100,6 +119,17 @@ export default async function ReportsPage() {
       merchMap.set(key, (merchMap.get(key) ?? 0) + Number(t.amount_in_base))
     })
     const topMerchants = Array.from(merchMap.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5)
+
+    // Top income sources
+    const incMerchMap = new Map<string, number>()
+    incomeTxns.forEach(t => {
+      const key = t.merchant?.trim() || 'Other'
+      incMerchMap.set(key, (incMerchMap.get(key) ?? 0) + Number(t.amount_in_base))
+    })
+    const topIncomeSources = Array.from(incMerchMap.entries())
       .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5)
@@ -150,17 +180,49 @@ export default async function ReportsPage() {
       income, expense, net: income - expense,
       txnCount: monthTxns.length,
       expenseCount: expenseTxns.length,
+      incomeCount: incomeTxns.length,
       daysInMonth, firstDayOfMonth, elapsedDays,
       todayDay: isCurrent ? now.getDate() : null,
       catBreakdown, topMerchants, byDayOfWeek,
+      incomeBreakdown, topIncomeSources,
       dailySpend, dailyIncome, dailyTxns,
       savingsRate: income > 0 ? ((income - expense) / income) * 100 : 0,
       avgDailySpend: elapsedDays > 0 ? expense / elapsedDays : 0,
       avgTxnSize: expenseTxns.length > 0 ? expense / expenseTxns.length : 0,
+      avgIncomeSize: incomeTxns.length > 0 ? income / incomeTxns.length : 0,
       biggestExpense: biggest
         ? { merchant: biggest.merchant?.trim() || 'Transaction', amount: Number(biggest.amount_in_base) }
         : null,
     }
+  })
+
+  /**
+   * Second pass: attach the previous month's figure to every category so the
+   * client can render a month-over-month delta. Categories that existed last
+   * month but vanished this month are surfaced separately as droppedCats.
+   */
+  const months = rawMonths.map((mo, i) => {
+    const prev = rawMonths[i - 1]
+
+    const prevCat = new Map((prev?.catBreakdown ?? []).map(c => [c.catId, c.amount]))
+    const seenCat = new Set(mo.catBreakdown.map(c => c.catId))
+    const catBreakdown = mo.catBreakdown.map(c => ({
+      ...c,
+      prevAmount: prev ? (prevCat.get(c.catId) ?? 0) : null,
+    }))
+    const droppedCats = (prev?.catBreakdown ?? [])
+      .filter(c => !seenCat.has(c.catId))
+      .map(c => ({ ...c, amount: 0, prevAmount: c.amount }))
+      .sort((a, b) => b.prevAmount - a.prevAmount)
+      .slice(0, 4)
+
+    const prevInc = new Map((prev?.incomeBreakdown ?? []).map(c => [c.catId, c.amount]))
+    const incomeBreakdown = mo.incomeBreakdown.map(c => ({
+      ...c,
+      prevAmount: prev ? (prevInc.get(c.catId) ?? 0) : null,
+    }))
+
+    return { ...mo, catBreakdown, droppedCats, incomeBreakdown, hasPrev: Boolean(prev) }
   })
 
   const coach = buildCoach({
