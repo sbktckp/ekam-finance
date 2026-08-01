@@ -1,11 +1,13 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { gsap } from 'gsap'
 import { Plus, X, Pencil, Trash2, AlertTriangle, Star, ArrowRightLeft, StickyNote } from 'lucide-react'
 import { addAccount, updateAccount, deleteAccount, setDefaultAccount } from '@/app/actions/accounts'
 import { addTransfer, deleteTransfer } from '@/app/actions/transfers'
 import { formatCurrency, cn } from '@/lib/utils'
 import { ACCOUNT_TYPES, CURRENCIES } from '@/lib/constants'
+import { PageHero } from '@/components/shared/page-hero'
 
 type Account  = { id: string; name: string; type: string; balance: number; currency: string; color: string; is_default: boolean }
 type Transfer = { id: string; date: string; amount_in_base: number; currency: string; note: string | null; account_id: string | null; to_account_id: string | null; created_at: string }
@@ -312,6 +314,7 @@ export function AccountsView({ accounts, netWorth, transfers }: { accounts: Acco
   const [delAcc, setDelAcc] = useState<Account | null>(null)
   const [delTransferId, setDelTransferId] = useState<string | null>(null)
   const [isDeletingTransfer, startDelTransfer] = useTransition()
+  const gridRef = useRef<HTMLDivElement>(null)
   const refresh = () => router.refresh()
 
   function makeDefault(id: string) { startTransition(() => setDefaultAccount(id).then(refresh)) }
@@ -325,61 +328,127 @@ export function AccountsView({ accounts, netWorth, transfers }: { accounts: Acco
     startDelTransfer(async () => { await deleteTransfer(delTransferId); setDelTransferId(null); router.refresh() })
   }
 
+  // Staggered card reveal, matching the hero's entrance.
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced || !gridRef.current) return
+    const ctx = gsap.context(() => {
+      gsap.from('[data-acct-card]', {
+        opacity: 0, y: 18, duration: 0.5, ease: 'power3.out', stagger: 0.06, delay: 0.1,
+      })
+    }, gridRef)
+    return () => ctx.revert()
+  }, [accounts.length])
+
+  const largest = accounts.reduce((m, a) => Math.max(m, Math.abs(Number(a.balance))), 0)
+
   return (
     <>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>Accounts</h1>
-            <p className="text-sm text-gray-400 mt-0.5">Net worth: <span className="font-bold text-emerald-500">{formatCurrency(netWorth, 'INR')}</span></p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setTransferOpen(true)}
-              className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-xl transition-all"
-              style={{ border: '1px solid rgba(99,102,241,0.35)', color: '#818cf8', background: 'rgba(99,102,241,0.08)' }}>
-              <ArrowRightLeft className="w-4 h-4" /> Transfer
-            </button>
-            <button onClick={() => setAddOpen(true)} className="flex items-center gap-1.5 text-sm font-bold px-4 py-2 rounded-xl text-black hover:-translate-y-px transition-all duration-150" style={{ background: '#10b981' }}>
-              <Plus className="w-4 h-4" /> Add account
-            </button>
-          </div>
-        </div>
+        <PageHero
+          kicker="Accounts"
+          title={<>Every account,<br />one balance sheet.</>}
+          stat={netWorth}
+          statLabel="Net worth"
+          shape="orbit"
+          intensity={0.5}
+          actions={
+            <>
+              <button onClick={() => setTransferOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5"
+                style={{ border: '1px solid rgba(99,102,241,0.4)', color: '#a5b4fc', background: 'rgba(99,102,241,0.12)' }}>
+                <ArrowRightLeft className="w-4 h-4" /> Transfer
+              </button>
+              <button onClick={() => setAddOpen(true)}
+                className="flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl transition-all duration-150 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/25"
+                style={{ background: 'linear-gradient(135deg, #10b981, #34d399)', color: '#04140e' }}>
+                <Plus className="w-4 h-4" /> Add account
+              </button>
+            </>
+          }
+        />
 
         {accounts.length > 0 ? (
-          <div className="grid sm:grid-cols-2 gap-4">
-            {accounts.map(a => (
-              <div key={a.id} className="surface-light rounded-2xl p-5 group">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white flex-shrink-0" style={{ background: a.color }}>
-                      {a.name.charAt(0).toUpperCase()}
+          <div ref={gridRef} className="grid sm:grid-cols-2 gap-4">
+            {accounts.map(a => {
+              const bal = Number(a.balance)
+              const share = netWorth > 0 ? (bal / netWorth) * 100 : 0
+              const fill = largest > 0 ? (Math.abs(bal) / largest) * 100 : 0
+              return (
+                <div
+                  key={a.id}
+                  data-acct-card
+                  className="relative overflow-hidden rounded-2xl p-5 group transition-transform duration-200 hover:-translate-y-0.5"
+                  style={{
+                    background: `radial-gradient(120% 120% at 88% 8%, ${a.color}1f 0%, rgba(11,14,20,0) 62%), #0d1017`,
+                    border: '1px solid rgba(148,163,184,0.13)',
+                  }}
+                >
+                  {/* Landing-page triangle motif, faint, top right */}
+                  <svg
+                    aria-hidden
+                    width="70" height="70" viewBox="0 0 24 24"
+                    className="absolute -top-2 -right-2 transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110"
+                    style={{ opacity: 0.07 }}
+                  >
+                    <path d="M12 3 L21 20 L3 20 Z" fill="none" stroke={a.color} strokeWidth="1.2" />
+                  </svg>
+
+                  <div className="relative flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-black text-white flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
+                        style={{ background: a.color, boxShadow: `0 6px 20px -6px ${a.color}` }}
+                      >
+                        {a.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold flex items-center gap-1.5 truncate" style={{ color: '#f1f5f9' }}>
+                          {a.name}
+                          {a.is_default && <Star className="w-3 h-3 fill-amber-400 text-amber-400 flex-shrink-0" />}
+                        </p>
+                        <p className="text-[11px] capitalize" style={{ color: 'rgba(148,163,184,0.75)' }}>{a.type}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                        {a.name}
-                        {a.is_default && <Star className="w-3 h-3 fill-amber-400 text-amber-400" />}
-                      </p>
-                      <p className="text-[11px] text-gray-400 capitalize">{a.type}</p>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex-shrink-0">
+                      {!a.is_default && (
+                        <button onClick={() => makeDefault(a.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-amber-400 hover:bg-amber-400/10" title="Set as default"><Star className="w-3.5 h-3.5" /></button>
+                      )}
+                      <button onClick={() => setEditAcc(a)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-emerald-400 hover:bg-emerald-400/10" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setDelAcc(a)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-400/10" title="Delete"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {!a.is_default && (
-                      <button onClick={() => makeDefault(a.id)} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-300 hover:text-amber-400 hover:bg-amber-50" title="Set as default"><Star className="w-3 h-3" /></button>
-                    )}
-                    <button onClick={() => setEditAcc(a)} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-emerald-500 hover:bg-emerald-50"><Pencil className="w-3 h-3" /></button>
-                    <button onClick={() => setDelAcc(a)} className="w-6 h-6 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50"><Trash2 className="w-3 h-3" /></button>
+
+                  <p className="relative text-2xl font-black" style={{ letterSpacing: '-0.03em', color: '#ffffff' }}>
+                    {formatCurrency(bal, a.currency)}
+                  </p>
+
+                  {/* Share of net worth */}
+                  <div className="relative mt-3">
+                    <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(148,163,184,0.12)' }}>
+                      <div
+                        className="h-1 rounded-full transition-all duration-1000"
+                        style={{ width: `${fill}%`, background: `linear-gradient(90deg, ${a.color}, ${a.color}88)` }}
+                      />
+                    </div>
+                    <p className="text-[10px] mt-1.5" style={{ color: 'rgba(148,163,184,0.65)' }}>
+                      {netWorth > 0 ? `${Math.round(share)}% of net worth` : 'No net worth to compare against'}
+                    </p>
                   </div>
                 </div>
-                <p className="text-2xl font-black text-gray-900" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(Number(a.balance), a.currency)}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         ) : (
-          <div className="surface-light rounded-2xl py-20 text-center">
+          <div
+            className="rounded-2xl py-20 text-center"
+            style={{ background: '#0d1017', border: '1px solid rgba(148,163,184,0.13)' }}
+          >
             <p className="text-3xl mb-3">🏦</p>
-            <p className="text-sm font-semibold text-gray-500">No accounts yet</p>
-            <p className="text-xs text-gray-400 mt-1 mb-4">Add a bank account, wallet, or card to get started</p>
-            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors">
+            <p className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>No accounts yet</p>
+            <p className="text-xs mt-1 mb-4" style={{ color: 'rgba(148,163,184,0.7)' }}>Add a bank account, wallet, or card to get started</p>
+            <button onClick={() => setAddOpen(true)} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg transition-all hover:-translate-y-0.5"
+              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7' }}>
               <Plus className="w-3.5 h-3.5" /> Add Account
             </button>
           </div>
@@ -388,56 +457,66 @@ export function AccountsView({ accounts, netWorth, transfers }: { accounts: Acco
         {/* ── Transfer History ─────────────────────────────────────────────── */}
         {transfers.length > 0 && (
           <div>
-            <h2 className="text-sm font-bold text-gray-900 mb-3">Transfer History</h2>
-            <div className="surface-light rounded-2xl overflow-hidden">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Date</th>
-                    <th className="text-left px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">From → To</th>
-                    <th className="text-right px-6 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Amount</th>
-                    <th className="px-4 py-3.5 w-14"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transfers.map(t => (
-                    <tr key={t.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors group">
-                      <td className="px-6 py-4 text-sm text-gray-400 font-medium whitespace-nowrap align-top">
-                        {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
-                            <span className="w-2 h-2 rounded-full" style={{ background: accountColor(t.account_id) }} />
-                            {accountName(t.account_id)}
-                          </span>
-                          <ArrowRightLeft className="w-3 h-3 text-gray-300 flex-shrink-0" />
-                          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
-                            <span className="w-2 h-2 rounded-full" style={{ background: accountColor(t.to_account_id) }} />
-                            {accountName(t.to_account_id)}
-                          </span>
-                        </div>
-                        {t.note && (
-                          <p className="flex items-center gap-1 mt-1.5" style={{ color: 'rgba(255,255,255,0.55)', fontSize: '12px', fontWeight: 500 }}>
-                            <StickyNote className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.40)' }} />
-                            {t.note}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right align-top">
-                        <span className="text-sm font-black" style={{ color: '#818cf8' }}>{formatCurrency(Number(t.amount_in_base), t.currency)}</span>
-                      </td>
-                      <td className="px-4 py-4 align-top">
-                        <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => setDelTransferId(t.id)} className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-400 hover:bg-red-50 transition-colors" title="Delete transfer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
+            <p className="text-[11px] font-bold uppercase tracking-widest mb-3" style={{ color: '#10b981' }}>
+              Money on the move
+            </p>
+            <h2 className="text-sm font-bold mb-3" style={{ color: '#f1f5f9' }}>Transfer history</h2>
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ background: '#0d1017', border: '1px solid rgba(148,163,184,0.13)' }}
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid rgba(148,163,184,0.12)' }}>
+                      <th className="text-left px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.7)' }}>Date</th>
+                      <th className="text-left px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.7)' }}>From → To</th>
+                      <th className="text-right px-6 py-3.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.7)' }}>Amount</th>
+                      <th className="px-4 py-3.5 w-14"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {transfers.map(t => (
+                      <tr key={t.id} className="transition-colors group hover:bg-white/[0.03]" style={{ borderBottom: '1px solid rgba(148,163,184,0.07)' }}>
+                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap align-top" style={{ color: 'rgba(148,163,184,0.8)' }}>
+                          {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style={{ background: 'rgba(148,163,184,0.12)', color: '#e2e8f0' }}>
+                              <span className="w-2 h-2 rounded-full" style={{ background: accountColor(t.account_id) }} />
+                              {accountName(t.account_id)}
+                            </span>
+                            <ArrowRightLeft className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(148,163,184,0.5)' }} />
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+                              style={{ background: 'rgba(148,163,184,0.12)', color: '#e2e8f0' }}>
+                              <span className="w-2 h-2 rounded-full" style={{ background: accountColor(t.to_account_id) }} />
+                              {accountName(t.to_account_id)}
+                            </span>
+                          </div>
+                          {t.note && (
+                            <p className="flex items-center gap-1 mt-1.5" style={{ color: 'rgba(148,163,184,0.7)', fontSize: '12px', fontWeight: 500 }}>
+                              <StickyNote className="w-3 h-3 flex-shrink-0" style={{ color: 'rgba(148,163,184,0.5)' }} />
+                              {t.note}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right align-top">
+                          <span className="text-sm font-black" style={{ color: '#818cf8' }}>{formatCurrency(Number(t.amount_in_base), t.currency)}</span>
+                        </td>
+                        <td className="px-4 py-4 align-top">
+                          <div className="flex items-center justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                            <button onClick={() => setDelTransferId(t.id)} className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors hover:bg-red-400/10" style={{ color: 'rgba(148,163,184,0.7)' }} title="Delete transfer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
