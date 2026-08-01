@@ -136,7 +136,7 @@ export default async function DashboardPage() {
 
       {/* Accounts + Goals */}
       <div className="grid lg:grid-cols-2 gap-5">
-        <Section title="Accounts" action={accounts?.length ? <ViewAll href="/dashboard/settings" /> : undefined}>
+        <Section title="Accounts" action={accounts?.length ? <ViewAll href="/dashboard/accounts" /> : undefined}>
           {accounts && accounts.length > 0 ? (
             <div className="space-y-3">
               {accounts.map(acc => (
@@ -158,7 +158,7 @@ export default async function DashboardPage() {
               ))}
             </div>
           ) : (
-            <Empty msg="No accounts yet" href="/dashboard/settings" cta="Add account" />
+            <Empty msg="No accounts yet" href="/dashboard/accounts" cta="Add account" />
           )}
         </Section>
 
