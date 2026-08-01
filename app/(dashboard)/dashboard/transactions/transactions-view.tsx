@@ -23,6 +23,12 @@ const DARK = { bg: '#1c1c1e', border: 'rgba(255,255,255,0.10)', input: 'rgba(255
 /** Panel tokens shared by the filter bar and the ledger, matching accounts. */
 const PANEL = { bg: '#0d1017', border: 'rgba(148,163,184,0.13)', divider: 'rgba(148,163,184,0.07)', muted: 'rgba(148,163,184,0.75)' }
 
+/** "2026-08" -> "August 2026" */
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
+}
+
 // ─── Edit modal (income + expense) ─────────────────────────────────────────────
 function EditModal({ txn, categories, open, onClose, onSuccess }: {
   txn: Txn; categories: Category[]; open: boolean; onClose: () => void; onSuccess: () => void
@@ -140,9 +146,11 @@ interface Props {
   categories:   Category[]
   budgetByCategory: Record<string, number>
   spentByCategory:  Record<string, number>
+  /** "YYYY-MM" for today. The ledger opens on this month by default. */
+  currentMonth: string
 }
 
-export function TransactionsView({ transactions, accounts, categories, budgetByCategory, spentByCategory }: Props) {
+export function TransactionsView({ transactions, accounts, categories, budgetByCategory, spentByCategory, currentMonth }: Props) {
   const router = useRouter()
   const [txnOpen, setTxnOpen]  = useState(false)
   const [accOpen, setAccOpen]  = useState(false)
@@ -152,22 +160,21 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
   const ledgerRef = useRef<HTMLDivElement>(null)
 
   // ── Filters ────────────────────────────────────────────────────────────────
+  // The month defaults to the current one so the header totals describe "this
+  // month" rather than an arbitrary slice of history.
   const [showFilters,  setShowFilters]  = useState(false)
   const [fType,        setFType]        = useState<'all' | 'income' | 'expense'>('all')
   const [fCategoryId,  setFCategoryId]  = useState('')
-  const [fMonth,       setFMonth]       = useState('')
+  const [fMonth,       setFMonth]       = useState(currentMonth)
   const [fAmountMin,   setFAmountMin]   = useState('')
   const [fAmountMax,   setFAmountMax]   = useState('')
 
   // Build month options from available transaction dates
   const monthOptions = useMemo(() => {
     const months = new Set(transactions.map(t => t.date.substring(0, 7)))
-    return Array.from(months).sort().reverse().map(m => {
-      const [y, mo] = m.split('-')
-      const label = new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })
-      return { value: m, label }
-    })
-  }, [transactions])
+    months.add(currentMonth)
+    return Array.from(months).sort().reverse().map(m => ({ value: m, label: monthLabel(m) }))
+  }, [transactions, currentMonth])
 
   const filtered = useMemo(() => transactions.filter(t => {
     if (fType !== 'all' && t.type !== fType) return false
@@ -189,9 +196,19 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
     return { income, expense, net: income - expense }
   }, [filtered])
 
-  const activeFilters = [fType !== 'all', !!fCategoryId, !!fMonth, !!fAmountMin, !!fAmountMax].filter(Boolean).length
+  // The default month is not a "filter" the user applied, so it doesn't count
+  // toward the badge — otherwise the page would always look pre-filtered.
+  const activeFilters = [
+    fType !== 'all',
+    !!fCategoryId,
+    fMonth !== currentMonth,
+    !!fAmountMin,
+    !!fAmountMax,
+  ].filter(Boolean).length
 
-  function clearFilters() { setFType('all'); setFCategoryId(''); setFMonth(''); setFAmountMin(''); setFAmountMax('') }
+  function clearFilters() {
+    setFType('all'); setFCategoryId(''); setFMonth(currentMonth); setFAmountMin(''); setFAmountMax('')
+  }
 
   function handleDelete() {
     if (!delTxn) return
@@ -210,6 +227,8 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
     return () => ctx.revert()
   }, [filtered.length, fType, fCategoryId, fMonth])
 
+  const scopeLabel = fMonth ? monthLabel(fMonth) : 'All time'
+
   const heroChips = (
     <div className="flex flex-wrap gap-2">
       {[
@@ -220,7 +239,7 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
         <span key={s.l} className="inline-flex items-baseline gap-2 px-3 py-1.5 rounded-full"
           style={{ background: s.bg, border: `1px solid ${s.bd}` }}>
           <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.8)' }}>{s.l}</span>
-          <span className="text-xs font-black" style={{ color: s.c }}>{formatCurrency(s.v, 'INR')}</span>
+          <span className="text-xs font-black" style={{ color: s.c }}>{formatCurrency(Math.round(s.v), 'INR')}</span>
         </span>
       ))}
     </div>
@@ -230,13 +249,9 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
     <>
       <div className="space-y-5">
         <PageHero
-          kicker="Transactions"
+          kicker={scopeLabel}
           title={<>Every rupee,<br />accounted for.</>}
-          subtitle={
-            activeFilters > 0
-              ? `Showing ${filtered.length} of ${transactions.length} entries`
-              : `${transactions.length} ${transactions.length === 1 ? 'entry' : 'entries'} on record`
-          }
+          subtitle={`${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'}${activeFilters > 0 ? ' matching your filters' : ''}`}
           shape="ring"
           intensity={0.55}
           actions={
@@ -269,7 +284,7 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
             </>
           }
         >
-          {transactions.length > 0 && heroChips}
+          {filtered.length > 0 && heroChips}
         </PageHero>
 
         {/* Filter bar */}
@@ -305,17 +320,15 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
               </div>
 
               {/* Month */}
-              {monthOptions.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.6)' }}>Month</p>
-                  <select value={fMonth} onChange={e => setFMonth(e.target.value)}
-                    className="px-3 py-2 rounded-lg text-xs font-medium focus:outline-none"
-                    style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.2)', color: 'rgba(226,232,240,0.9)', minWidth: 140 }}>
-                    <option value="">All time</option>
-                    {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                  </select>
-                </div>
-              )}
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: 'rgba(148,163,184,0.6)' }}>Month</p>
+                <select value={fMonth} onChange={e => setFMonth(e.target.value)}
+                  className="px-3 py-2 rounded-lg text-xs font-medium focus:outline-none"
+                  style={{ background: 'rgba(148,163,184,0.10)', border: '1px solid rgba(148,163,184,0.2)', color: 'rgba(226,232,240,0.9)', minWidth: 140 }}>
+                  <option value="">All time</option>
+                  {monthOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </div>
 
               {/* Amount range */}
               <div className="space-y-1">
@@ -334,12 +347,12 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
               {activeFilters > 0 && (
                 <button onClick={clearFilters} className="px-3 py-2 rounded-lg text-xs font-semibold transition-colors hover:bg-white/5"
                   style={{ color: 'rgba(148,163,184,0.8)', border: '1px solid rgba(148,163,184,0.18)' }}>
-                  Clear all
+                  Reset
                 </button>
               )}
             </div>
             <p style={{ color: 'rgba(148,163,184,0.55)', fontSize: '11px' }}>
-              Showing {filtered.length} of {transactions.length} transactions
+              Showing {filtered.length} of {transactions.length} transactions in range
             </p>
           </div>
         )}
@@ -483,11 +496,11 @@ export function TransactionsView({ transactions, accounts, categories, budgetByC
             <div className="py-20 text-center">
               <p className="text-3xl mb-3">{transactions.length > 0 ? '🔍' : '💸'}</p>
               <p className="text-sm font-semibold" style={{ color: '#e2e8f0' }}>
-                {transactions.length > 0 ? 'No transactions match your filters' : 'No transactions yet'}
+                {transactions.length > 0 ? `Nothing in ${scopeLabel}` : 'No transactions yet'}
               </p>
               <p className="text-xs mt-1 mb-4" style={{ color: 'rgba(148,163,184,0.7)' }}>
                 {transactions.length > 0
-                  ? <button onClick={clearFilters} className="text-emerald-400 underline underline-offset-2">Clear filters</button>
+                  ? <button onClick={() => setFMonth('')} className="text-emerald-400 underline underline-offset-2">Show all time</button>
                   : 'Click Add to record your first one'}
               </p>
               {transactions.length === 0 && (
