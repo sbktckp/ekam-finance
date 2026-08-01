@@ -95,41 +95,52 @@ export function DashboardHero({
     return () => ctx.revert()
   }, [netWorth, currency])
 
+  const accent = positive ? '16,185,129' : '244,63,94'
+
   return (
     <div ref={rootRef} className="space-y-4">
       {/* Hero slab */}
       <div
         className="relative overflow-hidden rounded-3xl"
         style={{
-          background: 'linear-gradient(140deg, rgba(16,185,129,0.10), rgba(139,92,246,0.10) 60%, rgba(15,23,42,0.04))',
-          border: '1px solid rgba(148,163,184,0.16)',
+          background: `radial-gradient(120% 140% at 82% 20%, rgba(${accent},0.16) 0%, rgba(139,92,246,0.10) 38%, rgba(9,11,16,0) 70%), #0b0e14`,
+          border: '1px solid rgba(148,163,184,0.14)',
         }}
       >
-        <div className="absolute inset-0 opacity-[0.85]">
+        <div className="absolute inset-0">
           <NetWorthScene positive={positive} intensity={intensity} />
         </div>
 
-        {/* Readability scrim over the canvas */}
+        {/*
+          Readability scrim. Dark, matching the app shell: opaque behind the
+          copy on the left and clearing to nothing on the right so the canvas
+          stays visible. Pointer events pass through to the scene.
+        */}
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ background: 'linear-gradient(105deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.72) 42%, rgba(255,255,255,0) 78%)' }}
+          style={{ background: 'linear-gradient(100deg, #0b0e14 0%, rgba(11,14,20,0.92) 34%, rgba(11,14,20,0.45) 58%, rgba(11,14,20,0) 80%)' }}
         />
 
         <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row sm:items-end justify-between gap-6">
           <div data-anim="head" className="min-w-0">
-            <p className="text-sm text-gray-500">{dateLabel}</p>
+            <p className="text-sm" style={{ color: 'rgba(148,163,184,0.85)' }}>{dateLabel}</p>
             <h1
-              className="font-black text-gray-900 mt-0.5"
-              style={{ fontSize: '24px', letterSpacing: '-0.03em' }}
+              className="font-black mt-0.5"
+              style={{ fontSize: '24px', letterSpacing: '-0.03em', color: '#f8fafc' }}
             >
               Good {greeting}, {name}
             </h1>
 
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-5">Net worth</p>
+            <p
+              className="text-[11px] font-bold uppercase tracking-widest mt-5"
+              style={{ color: 'rgba(148,163,184,0.7)' }}
+            >
+              Net worth
+            </p>
             <p
               ref={netRef}
-              className="font-black text-gray-900 leading-none mt-1"
-              style={{ fontSize: '40px', letterSpacing: '-0.04em' }}
+              className="font-black leading-none mt-1"
+              style={{ fontSize: '40px', letterSpacing: '-0.04em', color: '#ffffff' }}
             >
               {formatCurrency(netWorth, currency)}
             </p>
