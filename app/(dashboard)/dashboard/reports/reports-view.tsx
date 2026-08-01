@@ -7,7 +7,11 @@ type DayTxn = {
   day: number; id: string; merchant: string; amount: number
   icon: string; color: string; categoryName: string; type: 'income' | 'expense'
 }
-type Cat = { catId: string; icon: string; name: string; color: string; amount: number }
+type Cat = {
+  catId: string; icon: string; name: string; color: string; amount: number
+  /** Same category last month. null when there is no previous month in range. */
+  prevAmount: number | null
+}
 type Merch = { name: string; amount: number }
 type Dow = { label: string; amount: number }
 
@@ -15,12 +19,15 @@ export type MonthBundle = {
   label: string; monthYear: string; shortYear: string
   start: string; end: string; isCurrent: boolean
   income: number; expense: number; net: number
-  txnCount: number; expenseCount: number
+  txnCount: number; expenseCount: number; incomeCount: number
   daysInMonth: number; firstDayOfMonth: number; elapsedDays: number; todayDay: number | null
   catBreakdown: Cat[]; topMerchants: Merch[]; byDayOfWeek: Dow[]
+  droppedCats: Cat[]
+  incomeBreakdown: Cat[]; topIncomeSources: Merch[]
   dailySpend: number[]; dailyIncome: number[]; dailyTxns: DayTxn[][]
-  savingsRate: number; avgDailySpend: number; avgTxnSize: number
+  savingsRate: number; avgDailySpend: number; avgTxnSize: number; avgIncomeSize: number
   biggestExpense: { merchant: string; amount: number } | null
+  hasPrev: boolean
 }
 
 interface Props { months: MonthBundle[]; currency: string }
@@ -102,6 +109,39 @@ function SectionEmpty({ text }: { text: string }) {
     <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
       <Inbox className="w-5 h-5 text-gray-300" />
       <p className="text-xs text-gray-400">{text}</p>
+    </div>
+  )
+}
+
+/**
+ * One category row with its share bar and, when a baseline exists, a
+ * month-over-month delta badge plus the previous month's figure.
+ */
+function CatRow({ c, total, currency, showDelta, invert, i }: {
+  c: Cat; total: number; currency: string; showDelta: boolean; invert: boolean; i: number
+}) {
+  const pct = total > 0 ? (c.amount / total) * 100 : 0
+  const delta = c.prevAmount === null ? null : pctDelta(c.amount, c.prevAmount)
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1 gap-2">
+        <span className="text-xs font-semibold text-gray-700 truncate min-w-0">{c.icon} {c.name}</span>
+        <span className="flex items-center gap-1.5 flex-shrink-0">
+          <span className="text-[11px] font-bold text-gray-500">
+            {formatCurrency(c.amount, currency)} · {Math.round(pct)}%
+          </span>
+          {showDelta && c.prevAmount !== null && <DeltaBadge pct={delta} invert={invert} />}
+        </span>
+      </div>
+      <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+        <div className="h-1.5 rounded-full transition-all duration-1000"
+          style={{ width: `${pct}%`, background: c.color, transitionDelay: `${i * 80}ms` }} />
+      </div>
+      {showDelta && c.prevAmount !== null && c.prevAmount > 0 && (
+        <p className="text-[10px] text-gray-400 mt-0.5">
+          was {formatCurrency(c.prevAmount, currency)} last month
+        </p>
+      )}
     </div>
   )
 }
@@ -390,6 +430,16 @@ export function ReportsView({ months, currency }: Props) {
   const expenseDelta = prev ? pctDelta(m.expense, prev.expense) : null
   const netDelta = prev ? pctDelta(m.net, prev.net) : null
 
+  /** Categories that moved the most in absolute terms, for the MoM summary line. */
+  const biggestMover = useMemo(() => {
+    if (!m.hasPrev) return null
+    const scored = m.catBreakdown
+      .filter(c => c.prevAmount !== null)
+      .map(c => ({ c, diff: c.amount - (c.prevAmount ?? 0) }))
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+    return scored[0] && Math.abs(scored[0].diff) > 0 ? scored[0] : null
+  }, [m])
+
   return (
     <div className="space-y-5">
       <div className="animate-fade-up">
@@ -524,28 +574,50 @@ export function ReportsView({ months, currency }: Props) {
         <>
           <div className="grid sm:grid-cols-2 gap-4">
             <Card delay={0.36} className="p-5 sm:p-6">
-              <h2 className="text-sm font-bold text-gray-900 mb-4">Where it went</h2>
+              <div className="flex items-start justify-between mb-4 gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-gray-900">Where it went</h2>
+                  {m.hasPrev && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">Badges compare with {prev?.label ?? 'last month'}</p>
+                  )}
+                </div>
+              </div>
+
               {m.catBreakdown.length === 0 ? (
                 <SectionEmpty text="No expenses this month." />
               ) : (
                 <div className="space-y-3">
-                  {m.catBreakdown.slice(0, 6).map((c, i) => {
-                    const pct = m.expense > 0 ? (c.amount / m.expense) * 100 : 0
-                    return (
-                      <div key={c.catId}>
-                        <div className="flex items-center justify-between mb-1 gap-2">
-                          <span className="text-xs font-semibold text-gray-700 truncate">{c.icon} {c.name}</span>
-                          <span className="text-[11px] font-bold text-gray-500 flex-shrink-0">
-                            {formatCurrency(c.amount, currency)} · {Math.round(pct)}%
-                          </span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                          <div className="h-1.5 rounded-full transition-all duration-1000"
-                            style={{ width: `${pct}%`, background: c.color, transitionDelay: `${i * 80}ms` }} />
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {m.catBreakdown.slice(0, 6).map((c, i) => (
+                    <CatRow key={c.catId} c={c} total={m.expense} currency={currency}
+                      showDelta={m.hasPrev} invert i={i} />
+                  ))}
+                </div>
+              )}
+
+              {m.hasPrev && biggestMover && (
+                <p className="text-[11px] text-gray-500 mt-4 pt-3 border-t border-gray-100">
+                  Biggest shift: <span className="font-semibold text-gray-700">{biggestMover.c.name}</span>{' '}
+                  {biggestMover.diff > 0 ? 'up' : 'down'}{' '}
+                  <span className="font-bold" style={{ color: biggestMover.diff > 0 ? '#f87171' : '#34d399' }}>
+                    {formatCurrency(Math.abs(biggestMover.diff), currency)}
+                  </span>{' '}
+                  vs {prev?.label}
+                </p>
+              )}
+
+              {m.droppedCats.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">
+                    Nothing spent this month
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {m.droppedCats.map(c => (
+                      <span key={c.catId}
+                        className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-500">
+                        {c.icon} {c.name} · was {formatCurrency(c.prevAmount ?? 0, currency)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </Card>
@@ -571,8 +643,67 @@ export function ReportsView({ months, currency }: Props) {
             </Card>
           </div>
 
+          {/* Income side, mirrors the expense pair above */}
           <div className="grid sm:grid-cols-2 gap-4">
+            <Card delay={0.42} className="p-5 sm:p-6">
+              <div className="flex items-start justify-between mb-4 gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold text-gray-900">Where it came from</h2>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {m.incomeCount > 0
+                      ? `${m.incomeCount} deposit${m.incomeCount === 1 ? '' : 's'} · avg ${formatCurrency(m.avgIncomeSize, currency)}`
+                      : 'Income by category'}
+                  </p>
+                </div>
+                {m.income > 0 && (
+                  <span className="text-xs font-black flex-shrink-0" style={{ color: '#10b981' }}>
+                    {formatCurrency(m.income, currency)}
+                  </span>
+                )}
+              </div>
+              {m.incomeBreakdown.length === 0 ? (
+                <SectionEmpty text="No money in this month." />
+              ) : (
+                <div className="space-y-3">
+                  {m.incomeBreakdown.slice(0, 6).map((c, i) => (
+                    <CatRow key={c.catId} c={c} total={m.income} currency={currency}
+                      showDelta={m.hasPrev} invert={false} i={i} />
+                  ))}
+                </div>
+              )}
+            </Card>
+
             <Card delay={0.44} className="p-5 sm:p-6">
+              <h2 className="text-sm font-bold text-gray-900 mb-4">Top income sources</h2>
+              {m.topIncomeSources.length === 0 ? (
+                <SectionEmpty text="No sources yet." />
+              ) : (
+                <div className="space-y-2.5">
+                  {m.topIncomeSources.map((x, i) => {
+                    const share = m.income > 0 ? (x.amount / m.income) * 100 : 0
+                    return (
+                      <div key={x.name} className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black flex-shrink-0"
+                            style={{ background: 'rgba(16,185,129,0.14)', color: '#34d399' }}>{i + 1}</span>
+                          <div className="min-w-0">
+                            <span className="block text-xs font-semibold text-gray-700 truncate">{x.name}</span>
+                            <span className="block text-[10px] text-gray-400">{Math.round(share)}% of money in</span>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-emerald-600 flex-shrink-0">
+                          {formatCurrency(x.amount, currency)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </Card>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Card delay={0.48} className="p-5 sm:p-6">
               <h2 className="text-sm font-bold text-gray-900 mb-4">By day of week</h2>
               <div className="flex items-end gap-2 h-24">
                 {m.byDayOfWeek.map(d => (
@@ -591,7 +722,7 @@ export function ReportsView({ months, currency }: Props) {
               </div>
             </Card>
 
-            <Card delay={0.48} className="p-5 sm:p-6 flex flex-col justify-center">
+            <Card delay={0.52} className="p-5 sm:p-6 flex flex-col justify-center">
               <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Biggest single expense</p>
               {m.biggestExpense ? (
                 <>
@@ -610,7 +741,7 @@ export function ReportsView({ months, currency }: Props) {
       )}
 
       {/* Compare table */}
-      <Card delay={0.52} className="overflow-hidden">
+      <Card delay={0.56} className="overflow-hidden">
         <div className="px-3 sm:px-6 pt-5 pb-3">
           <h2 className="text-sm font-bold text-gray-900">Month by month</h2>
         </div>
